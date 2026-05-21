@@ -237,7 +237,7 @@ select.form-input{appearance:none}
     <div class="logo-text">SENA</div>
     <div style="display:flex;align-items:center;gap:6px">
       <span class="logo-sub">Fitness Mobile</span>
-      <span id="sync-badge" class="badge badge-green" style="display:none; cursor:pointer; font-size:9px; padding:2px 6px;" onclick="unlinkDevice()">☁️ Sincronizado</span>
+      <span id="sync-badge" class="badge" style="cursor:pointer; font-size:9px; padding:2px 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;" onclick="openMobileSyncModal()">⚪ Inicializando...</span>
     </div>
   </div>
   <div class="streak-pill" id="header-streak">🔥 0 dias</div>
@@ -562,6 +562,46 @@ select.form-input{appearance:none}
   </div>
 </div>
 
+<!-- ═══ MODAL: SINCRONIZAÇÃO ═══ -->
+<div class="overlay" id="overlay-sync-settings" onclick="closeOvBg(event,'overlay-sync-settings')">
+  <div class="sheet">
+    <div class="sheet-handle" onclick="closeOv('overlay-sync-settings')"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">☁️ Sincronização</div>
+      <button class="close-btn" onclick="closeOv('overlay-sync-settings')">✕</button>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 15px; padding: 5px 0;">
+      <!-- Status da Conexão -->
+      <div style="background: var(--bg-card, rgba(255,255,255,0.03)); padding: 12px; border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold;">Status da Conexão</div>
+        <div id="mobileSyncStatusText" style="font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+          ⚪ Carregando...
+        </div>
+        <div id="mobileConnectedIdText" style="font-size: 10px; color: var(--muted); word-break: break-all; margin-top: 2px;">
+          Nenhum dispositivo conectado
+        </div>
+      </div>
+
+      <!-- Configuração de ID -->
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left;">
+        <label class="form-label" style="margin-bottom: 0; font-weight: bold; color: var(--accent);">🔑 Vincular ID Personalizado</label>
+        <p style="font-size: 11px; color: var(--muted); margin: 0; line-height: 1.4;">
+          Digite o mesmo ID definido no computador para parear os dispositivos sem usar QR Code.
+        </p>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <input type="text" class="form-input" id="mobileSyncIdInput" placeholder="Ex: brd_fitness" style="margin-bottom: 0; font-size: 13px; flex: 1; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);" />
+          <button class="btn btn-primary" style="padding: 0 16px; font-size: 12px; height: 38px; display: flex; align-items: center; justify-content: center; font-weight: bold;" onclick="saveMobileSyncId()">Salvar</button>
+        </div>
+      </div>
+
+      <div class="divider" style="margin: 5px 0;"></div>
+
+      <button class="btn btn-danger btn-block btn-sm" style="display: flex; justify-content: center; align-items: center;" onclick="unlinkMobileDevice()">🗑️ Desvincular e Resetar Sincronização</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -615,19 +655,166 @@ function loadStateLocal(){
     if(appState.waterDate!==t){appState.waterMl=0;appState.waterLog=[];appState.waterDate=t;}
   }catch(e){localStorage.removeItem(STORAGE_KEY);}
 }
-function saveStateLocal(){localStorage.setItem(STORAGE_KEY,JSON.stringify(appState));}
+function saveStateLocal(){
+  try {
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(appState));
+  } catch(e) {
+    console.error("Local save error", e);
+  }
+}
 function saveState(){
   saveStateLocal();
   if(fbUserId) fbDb.collection("users").doc(fbUserId).set(appState).catch(e=>console.error(e));
 }
 let remoteListenerUnsubscribe = null;
 let isFirstLoad = true;
+let lastRemoteState = null;
 
 function renderAllState() {
   renderTreinos();
   renderCalendario();
   renderNutricao();
 }
+
+function areStatesEqual(state1, state2) {
+  if (!state1 || !state2) return false;
+  const clean = (s) => {
+    const copy = { ...s };
+    delete copy.lastActiveDesktop;
+    delete copy.lastActiveMobile;
+    return JSON.stringify(copy);
+  };
+  return clean(state1) === clean(state2);
+}
+
+function updateSyncBadge() {
+  const syncBadge = document.getElementById('sync-badge');
+  if (!syncBadge) return;
+  
+  let syncedUid = null;
+  try {
+    syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+  } catch(e) {}
+  
+  if (syncedUid) {
+    const isCustom = syncedUid.startsWith('custom_');
+    const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid.substring(0, 6);
+    
+    let isDesktopActive = false;
+    if (lastRemoteState && lastRemoteState.lastActiveDesktop) {
+      const elapsed = Date.now() - lastRemoteState.lastActiveDesktop;
+      if (elapsed < 120000) {
+        isDesktopActive = true;
+      }
+    }
+    
+    if (isDesktopActive) {
+      syncBadge.innerHTML = `🟢 Sincronizado (${displayId})`;
+      syncBadge.style.color = '#10b981';
+      syncBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      syncBadge.style.borderColor = '#10b981';
+    } else {
+      syncBadge.innerHTML = `☁️ Sincronizado (${displayId})`;
+      syncBadge.style.color = 'var(--muted)';
+      syncBadge.style.background = 'rgba(255,255,255,0.05)';
+      syncBadge.style.borderColor = 'var(--border)';
+    }
+  } else {
+    syncBadge.innerHTML = `⚠️ Não Sincronizado`;
+    syncBadge.style.color = 'var(--muted)';
+    syncBadge.style.background = 'rgba(255,255,255,0.05)';
+    syncBadge.style.borderColor = 'var(--border)';
+  }
+  
+  const statusText = document.getElementById('mobileSyncStatusText');
+  const connectedIdText = document.getElementById('mobileConnectedIdText');
+  const syncInput = document.getElementById('mobileSyncIdInput');
+  
+  if (statusText && connectedIdText) {
+    if (syncedUid) {
+      const isCustom = syncedUid.startsWith('custom_');
+      const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid;
+      
+      let isDesktopActive = false;
+      if (lastRemoteState && lastRemoteState.lastActiveDesktop) {
+        const elapsed = Date.now() - lastRemoteState.lastActiveDesktop;
+        if (elapsed < 120000) isDesktopActive = true;
+      }
+      
+      if (isDesktopActive) {
+        statusText.innerHTML = `🟢 Sincronizado com Computador`;
+        statusText.style.color = '#10b981';
+      } else {
+        statusText.innerHTML = `☁️ Pareado (Nuvem)`;
+        statusText.style.color = '#ffffff';
+      }
+      connectedIdText.textContent = `ID Pareado: ${displayId}`;
+      if (syncInput) syncInput.value = isCustom ? displayId : '';
+    } else {
+      statusText.innerHTML = `⚠️ Apenas Local`;
+      statusText.style.color = 'var(--muted)';
+      connectedIdText.textContent = `Seus dados estão sendo salvos apenas localmente neste aparelho.`;
+      if (syncInput) syncInput.value = '';
+    }
+  }
+}
+
+function openMobileSyncModal() {
+  updateSyncBadge();
+  openOv('overlay-sync-settings');
+}
+
+function saveMobileSyncId() {
+  const input = document.getElementById('mobileSyncIdInput');
+  if (!input) return;
+  const rawId = input.value.trim();
+  
+  if (!rawId) {
+    toast("Digite um ID válido.");
+    return;
+  }
+  
+  const cleanId = rawId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (cleanId.length < 3) {
+    toast("ID deve ter pelo menos 3 caracteres.");
+    return;
+  }
+  
+  try {
+    localStorage.setItem('senaFitnessSyncedUid', 'custom_' + cleanId);
+  } catch(e) {}
+  
+  toast("ID vinculado! Carregando...");
+  closeOv('overlay-sync-settings');
+  setTimeout(() => {
+    window.location.reload();
+  }, 1200);
+}
+
+function unlinkMobileDevice() {
+  if (confirm("Deseja desvincular seu celular do computador? Seus dados voltarão a ser independentes.")) {
+    try {
+      localStorage.removeItem('senaFitnessSyncedUid');
+    } catch(e) {}
+    toast("Dispositivo desvinculado. Recarregando...");
+    closeOv('overlay-sync-settings');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+  }
+}
+
+function updateMobilePresence() {
+  if (!fbUserId) return;
+  const ref = fbDb.collection("users").doc(fbUserId);
+  ref.update({
+    lastActiveMobile: Date.now()
+  }).catch(() => {
+    saveState();
+  });
+}
+// Run presence check
+setInterval(updateMobilePresence, 30000);
 
 function setupRemoteListener() {
   if (!fbUserId) return;
@@ -640,11 +827,17 @@ function setupRemoteListener() {
   remoteListenerUnsubscribe = ref.onSnapshot((docSnap) => {
     if (docSnap.exists) {
       const data = docSnap.data();
-      if (isFirstLoad || JSON.stringify(data) !== JSON.stringify(appState)) {
+      lastRemoteState = data;
+      updateSyncBadge();
+      
+      if (isFirstLoad || !areStatesEqual(data, appState)) {
         isFirstLoad = false;
         Object.assign(appState, data);
         saveStateLocal();
         renderAllState();
+      } else {
+        appState.lastActiveDesktop = data.lastActiveDesktop;
+        appState.lastActiveMobile = data.lastActiveMobile;
       }
     } else {
       isFirstLoad = false;
@@ -653,27 +846,6 @@ function setupRemoteListener() {
   }, (error) => {
     console.error("Firebase onSnapshot error:", error);
   });
-}
-
-function updateSyncBadge() {
-  const syncBadge = document.getElementById('sync-badge');
-  if (syncBadge) {
-    if (localStorage.getItem('senaFitnessSyncedUid')) {
-      syncBadge.style.display = 'inline-flex';
-    } else {
-      syncBadge.style.display = 'none';
-    }
-  }
-}
-
-function unlinkDevice() {
-  if (confirm("Deseja desvincular seu celular do computador? Seus dados voltarão a ser independentes.")) {
-    localStorage.removeItem('senaFitnessSyncedUid');
-    toast("Dispositivo desvinculado. Recarregando...");
-    setTimeout(() => {
-      window.location.reload();
-    }, 1200);
-  }
 }
 
 // ── ROTINAS ───────────────────────────────────────────────
@@ -1244,13 +1416,17 @@ function delMeal(id){
 
 // ── INIT ──────────────────────────────────────────────────
 // URL Sync check
-const urlParams = new URLSearchParams(window.location.search);
-const urlUid = urlParams.get('uid');
-if (urlUid) {
-  localStorage.setItem('senaFitnessSyncedUid', urlUid);
-  // Clean URL parameter
-  const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
-  window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+try {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlUid = urlParams.get('uid');
+  if (urlUid) {
+    localStorage.setItem('senaFitnessSyncedUid', urlUid);
+    // Clean URL parameter
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+  }
+} catch (e) {
+  console.error("Error processing URL sync parameters:", e);
 }
 
 loadStateLocal();
@@ -1260,17 +1436,45 @@ renderCalendario();
 renderNutricao();
 initFoodDatalist();
 
-fbAuth.signInAnonymously().catch(e=>console.error("Auth error:",e));
-fbAuth.onAuthStateChanged(async user=>{
-  if(user){
-    const syncedUid = localStorage.getItem('senaFitnessSyncedUid');
-    fbUserId = syncedUid || user.uid;
-    
-    updateSyncBadge();
-    setupRemoteListener();
-    toast(syncedUid ? "Sincronizado com Computador! 📱☁️" : "Sincronizado na nuvem! ☁️");
-  }
-});
+try {
+  fbAuth.signInAnonymously().catch(e => console.error("Auth error:", e));
+  fbAuth.onAuthStateChanged(async user => {
+    try {
+      if (user) {
+        let syncedUid = null;
+        try {
+          syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+        } catch(e) {}
+        
+        if (syncedUid) {
+          syncedUid = syncedUid.trim();
+          if (syncedUid.startsWith('custom_')) {
+            const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            fbUserId = 'custom_' + cleanId;
+          } else if (syncedUid.length < 25) { // It's a custom nickname without the prefix
+            const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+            fbUserId = 'custom_' + cleanId;
+            try {
+              localStorage.setItem('senaFitnessSyncedUid', fbUserId);
+            } catch(e) {}
+          } else {
+            fbUserId = syncedUid;
+          }
+        } else {
+          fbUserId = user.uid;
+        }
+        
+        updateSyncBadge();
+        setupRemoteListener();
+        toast(syncedUid ? "Sincronizado com Computador! 📱☁️" : "Sincronizado na nuvem! ☁️");
+      }
+    } catch(err) {
+      console.error("Error in onAuthStateChanged inner callback:", err);
+    }
+  });
+} catch(e) {
+  console.error("Error setting up auth observer:", e);
+}
 </script>
 </body>
 </html>

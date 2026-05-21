@@ -423,7 +423,12 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
         <div class="user-sub">Intermediário · SENA</div>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:12px;justify-content:center" onclick="openSyncModal()">📱 Sync Celular</button>
+    <div class="sync-sidebar-container" style="width: 100%; margin-top: 12px; display: flex; flex-direction: column; gap: 4px;">
+      <button id="sidebarSyncBtn" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;border:1px solid var(--border);" onclick="openSyncModal()">📱 Sync Celular</button>
+      <div id="sidebarSyncStatus" style="font-size: 9px; text-align: center; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: 500;">
+        ⚪ Carregando...
+      </div>
+    </div>
   </div>
 </aside>
 
@@ -1146,24 +1151,56 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
 </div>
 
 <div class="modal-overlay" id="syncModal">
-  <div class="modal" style="width: 400px;">
+  <div class="modal" style="width: 400px; max-height: 90vh; overflow-y: auto;">
     <div class="modal-header">
       <div class="modal-title">📱 Sincronizar Celular</div>
       <button class="close-btn" onclick="closeModal('syncModal')">✕</button>
     </div>
     
-    <div style="text-align: center; margin-bottom: 20px;">
-      <p style="font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5;">
-        Aponte a câmera do seu celular para o QR Code abaixo ou copie o link para sincronizar seus treinos e dieta em tempo real.
+    <!-- Aviso de Localhost / file:/// -->
+    <div id="localWarningSection" style="display: none; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.08); margin-bottom: 15px; text-align: left;">
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: bold; color: #f59e0b;">
+        <span>⚠️</span> Atenção (Acesso Local)
+      </div>
+      <p style="font-size: 11px; color: var(--text); margin: 0; line-height: 1.4;">
+        Você está acessando o app localmente (<span id="localWarningType">localhost</span>). Para sincronizar:
+      </p>
+      <ul style="font-size: 10px; color: var(--muted); margin: 4px 0 0 15px; padding: 0; line-height: 1.4;">
+        <li>Conecte o computador e o celular no mesmo Wi-Fi.</li>
+        <li>Acesse o computador pelo IP no navegador do celular: <br/><code id="localIpSuggest" style="background:var(--bg3); padding:2px 4px; border-radius:4px; display:inline-block; margin-top:2px;">http://192.168.1.12:5173/index.html</code></li>
+        <li>Ou use a versão hospedada no GitHub Pages.</li>
+      </ul>
+    </div>
+
+    <!-- Opção 1: ID Personalizado (Mais fácil, sem câmera) -->
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; text-align: left; background: var(--bg2); padding: 12px; border-radius: 12px; border: 1px solid var(--border);">
+      <label class="form-label" style="margin-bottom: 0; font-weight: bold; color: var(--accent);">🔑 Sincronizar via ID Personalizado</label>
+      <p style="font-size: 11px; color: var(--muted); margin: 0; line-height: 1.4;">
+        Digite um ID simples (ex: seu nome). Coloque o mesmo ID no celular para conectar diretamente da tela inicial sem usar QR Code.
+      </p>
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+        <input type="text" id="customSyncIdInput" placeholder="Ex: brd_fitness" style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 12px;" />
+        <button class="btn btn-primary btn-sm" onclick="saveCustomSyncId()">Salvar ID</button>
+      </div>
+      <div id="customSyncIdHint" style="font-size: 10px; color: var(--muted); margin-top: 2px;">
+        ID de Pareamento Ativo: <span id="currentCustomIdText" style="font-weight: bold; color: var(--accent3);">Nenhum (usando ID temporário)</span>
+      </div>
+    </div>
+
+    <!-- Opção 2: QR Code / Link -->
+    <div style="text-align: center; margin-bottom: 15px; border-top: 1px solid var(--border); padding-top: 15px;">
+      <label class="form-label" style="text-align: left; display: block; margin-bottom: 8px; font-weight: bold;">📷 Sincronizar via QR Code</label>
+      <p style="font-size: 12px; color: var(--muted); margin-bottom: 15px; line-height: 1.4; text-align: left;">
+        Aponte a câmera do celular para o QR Code abaixo para carregar o ID ativo automaticamente.
       </p>
       
-      <div style="background: #ffffff; padding: 16px; border-radius: 16px; display: inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 20px;">
-        <img id="syncQrCode" src="" alt="QR Code" style="display: block; width: 180px; height: 180px; border-radius: 8px;" />
+      <div style="background: #ffffff; padding: 16px; border-radius: 16px; display: inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 15px;">
+        <img id="syncQrCode" src="" alt="QR Code" style="display: block; width: 150px; height: 150px; border-radius: 8px;" />
       </div>
     </div>
     
-    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-      <label class="form-label" style="margin-bottom: 0;">Link de Sincronização</label>
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; text-align: left;">
+      <label class="form-label" style="margin-bottom: 0;">Link direto de pareamento</label>
       <div style="display: flex; gap: 8px;">
         <input type="text" id="syncLinkInput" readonly style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 12px;" onclick="this.select()" />
         <button class="btn btn-primary btn-sm" onclick="copySyncLink()">Copiar</button>
@@ -1313,6 +1350,7 @@ function saveState(){
 
 let remoteListenerUnsubscribe = null;
 let isFirstLoad = true;
+let lastRemoteState = null;
 
 function renderAllState() {
   buildRoutineTabs();
@@ -1330,6 +1368,126 @@ function renderAllState() {
   renderWater();
 }
 
+function areStatesEqual(state1, state2) {
+  if (!state1 || !state2) return false;
+  const clean = (s) => {
+    const copy = { ...s };
+    delete copy.lastActiveDesktop;
+    delete copy.lastActiveMobile;
+    return JSON.stringify(copy);
+  };
+  return clean(state1) === clean(state2);
+}
+
+function updateSyncUI() {
+  const statusEl = document.getElementById('sidebarSyncStatus');
+  const btnEl = document.getElementById('sidebarSyncBtn');
+  if (!statusEl || !btnEl) return;
+  
+  if (!firebaseUserId) {
+    statusEl.innerHTML = '⚪ Conectando ao Firebase...';
+    return;
+  }
+  
+  const isCustom = firebaseUserId.startsWith('custom_');
+  const displayId = isCustom ? firebaseUserId.replace('custom_', '') : firebaseUserId.substring(0, 6);
+  
+  let isMobileActive = false;
+  if (lastRemoteState && lastRemoteState.lastActiveMobile) {
+    const elapsed = Date.now() - lastRemoteState.lastActiveMobile;
+    if (elapsed < 120000) { // 2 minutes
+      isMobileActive = true;
+    }
+  }
+  
+  if (isMobileActive) {
+    statusEl.innerHTML = `🟢 Celular Online (${displayId})`;
+    statusEl.style.color = '#10b981';
+    btnEl.style.borderColor = '#10b981';
+  } else {
+    statusEl.innerHTML = `☁️ Nuvem Ativa (${displayId})`;
+    statusEl.style.color = 'var(--muted)';
+    btnEl.style.borderColor = 'var(--border)';
+  }
+  
+  // Modal Fields
+  const customIdInput = document.getElementById('customSyncIdInput');
+  const currentCustomIdText = document.getElementById('currentCustomIdText');
+  if (customIdInput && currentCustomIdText) {
+    let customId = '';
+    try {
+      customId = localStorage.getItem('senaFitnessCustomUid') || '';
+    } catch(e) {}
+    customIdInput.value = customId;
+    if (customId) {
+      currentCustomIdText.textContent = customId;
+      currentCustomIdText.style.color = 'var(--accent3)';
+    } else {
+      currentCustomIdText.textContent = 'Nenhum (usando ID temporário)';
+      currentCustomIdText.style.color = 'var(--muted)';
+    }
+  }
+}
+
+function saveCustomSyncId() {
+  const input = document.getElementById('customSyncIdInput');
+  if (!input) return;
+  const rawId = input.value.trim();
+  
+  if (!rawId) {
+    try {
+      localStorage.removeItem('senaFitnessCustomUid');
+    } catch(e) {}
+    if (auth.currentUser) {
+      firebaseUserId = auth.currentUser.uid;
+    }
+    showToast("ID personalizado removido. Usando ID padrão.");
+  } else {
+    const cleanId = rawId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+    if (cleanId.length < 3) {
+      showToast("ID deve ter pelo menos 3 caracteres.");
+      return;
+    }
+    try {
+      localStorage.setItem('senaFitnessCustomUid', cleanId);
+    } catch(e) {}
+    firebaseUserId = 'custom_' + cleanId;
+    showToast(`ID configurado como: ${cleanId}`);
+  }
+  
+  isFirstLoad = true;
+  lastRemoteState = null;
+  setupRemoteListener();
+  updateSyncUI();
+  
+  // Re-generate sync QR / link inside open modal
+  const origin = window.location.origin;
+  let path = window.location.pathname;
+  if (path.endsWith('index.html')) {
+    path = path.replace('index.html', 'mobile.html');
+  } else {
+    if (!path.endsWith('/')) path += '/';
+    path += 'mobile.html';
+  }
+  const syncUrl = `${origin}${path}?uid=${firebaseUserId}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(syncUrl)}`;
+  document.getElementById('syncQrCode').src = qrUrl;
+  document.getElementById('syncLinkInput').value = syncUrl;
+}
+
+function updateDesktopPresence() {
+  if (!firebaseUserId) return;
+  const docRef = db.collection("users").doc(firebaseUserId);
+  docRef.update({
+    lastActiveDesktop: Date.now()
+  }).catch(() => {
+    // Fallback if doc doesn't exist yet
+    saveState();
+  });
+}
+// Run presence check
+setInterval(updateDesktopPresence, 30000);
+
 function setupRemoteListener() {
   if (!firebaseUserId) return;
   if (remoteListenerUnsubscribe) {
@@ -1341,11 +1499,17 @@ function setupRemoteListener() {
   remoteListenerUnsubscribe = docRef.onSnapshot((docSnap) => {
     if (docSnap.exists) {
       const data = docSnap.data();
-      if (isFirstLoad || JSON.stringify(data) !== JSON.stringify(appState)) {
+      lastRemoteState = data;
+      updateSyncUI();
+      
+      if (isFirstLoad || !areStatesEqual(data, appState)) {
         isFirstLoad = false;
         Object.assign(appState, data);
         saveStateLocal();
         renderAllState();
+      } else {
+        appState.lastActiveDesktop = data.lastActiveDesktop;
+        appState.lastActiveMobile = data.lastActiveMobile;
       }
     } else {
       isFirstLoad = false;
@@ -1362,7 +1526,6 @@ function openSyncModal() {
     return;
   }
   
-  // Constrói o link do mobile.html de forma dinâmica baseada no domínio atual
   const origin = window.location.origin;
   let path = window.location.pathname;
   if (path.endsWith('index.html')) {
@@ -1374,12 +1537,33 @@ function openSyncModal() {
     path += 'mobile.html';
   }
   const syncUrl = `${origin}${path}?uid=${firebaseUserId}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(syncUrl)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(syncUrl)}`;
   
   document.getElementById('syncQrCode').src = qrUrl;
   document.getElementById('syncLinkInput').value = syncUrl;
   document.getElementById('syncCopySuccess').style.display = 'none';
   
+  const warningSection = document.getElementById('localWarningSection');
+  if (warningSection) {
+    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.startsWith('file:');
+    if (isLocal) {
+      warningSection.style.display = 'flex';
+      const warningType = document.getElementById('localWarningType');
+      const ipSuggest = document.getElementById('localIpSuggest');
+      
+      if (origin.startsWith('file:')) {
+        warningType.textContent = 'arquivo local file://';
+        ipSuggest.textContent = 'http://192.168.1.12:5173/index.html';
+      } else {
+        warningType.textContent = 'localhost';
+        ipSuggest.textContent = `http://192.168.1.12${window.location.port ? ':' + window.location.port : ''}${path.replace('mobile.html', 'index.html')}`;
+      }
+    } else {
+      warningSection.style.display = 'none';
+    }
+  }
+  
+  updateSyncUI();
   openModal('syncModal');
 }
 
@@ -2880,8 +3064,18 @@ auth.signInAnonymously().catch(err => {
 
 auth.onAuthStateChanged(async (user) => {
     if(user) {
-        firebaseUserId = user.uid;
+        let customId = null;
+        try {
+            customId = localStorage.getItem('senaFitnessCustomUid');
+        } catch(e) {}
+        
+        if (customId) {
+            firebaseUserId = 'custom_' + customId.trim();
+        } else {
+            firebaseUserId = user.uid;
+        }
         setupRemoteListener();
+        updateSyncUI();
         showToast("Sincronizado na nuvem! ☁️");
     }
 });
