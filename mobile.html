@@ -235,7 +235,10 @@ select.form-input{appearance:none}
 <div class="header">
   <div>
     <div class="logo-text">SENA</div>
-    <div class="logo-sub">Fitness Mobile</div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span class="logo-sub">Fitness Mobile</span>
+      <span id="sync-badge" class="badge badge-green" style="display:none; cursor:pointer; font-size:9px; padding:2px 6px;" onclick="unlinkDevice()">☁️ Sincronizado</span>
+    </div>
   </div>
   <div class="streak-pill" id="header-streak">🔥 0 dias</div>
 </div>
@@ -617,14 +620,60 @@ function saveState(){
   saveStateLocal();
   if(fbUserId) fbDb.collection("users").doc(fbUserId).set(appState).catch(e=>console.error(e));
 }
-async function loadRemoteState(){
-  if(!fbUserId)return;
-  try{
-    const ref=fbDb.collection("users").doc(fbUserId);
-    const snap=await ref.get();
-    if(snap.exists){Object.assign(appState,snap.data());saveStateLocal();}
-    else await ref.set(appState);
-  }catch(e){console.error("FB load error",e);}
+let remoteListenerUnsubscribe = null;
+let isFirstLoad = true;
+
+function renderAllState() {
+  renderTreinos();
+  renderCalendario();
+  renderNutricao();
+}
+
+function setupRemoteListener() {
+  if (!fbUserId) return;
+  if (remoteListenerUnsubscribe) {
+    remoteListenerUnsubscribe();
+  }
+  
+  const ref = fbDb.collection("users").doc(fbUserId);
+  
+  remoteListenerUnsubscribe = ref.onSnapshot((docSnap) => {
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      if (isFirstLoad || JSON.stringify(data) !== JSON.stringify(appState)) {
+        isFirstLoad = false;
+        Object.assign(appState, data);
+        saveStateLocal();
+        renderAllState();
+      }
+    } else {
+      isFirstLoad = false;
+      ref.set(appState).catch(e => console.error("FB init doc error", e));
+    }
+  }, (error) => {
+    console.error("Firebase onSnapshot error:", error);
+  });
+}
+
+function updateSyncBadge() {
+  const syncBadge = document.getElementById('sync-badge');
+  if (syncBadge) {
+    if (localStorage.getItem('senaFitnessSyncedUid')) {
+      syncBadge.style.display = 'inline-flex';
+    } else {
+      syncBadge.style.display = 'none';
+    }
+  }
+}
+
+function unlinkDevice() {
+  if (confirm("Deseja desvincular seu celular do computador? Seus dados voltarão a ser independentes.")) {
+    localStorage.removeItem('senaFitnessSyncedUid');
+    toast("Dispositivo desvinculado. Recarregando...");
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+  }
 }
 
 // ── ROTINAS ───────────────────────────────────────────────
@@ -1194,6 +1243,16 @@ function delMeal(id){
 }
 
 // ── INIT ──────────────────────────────────────────────────
+// URL Sync check
+const urlParams = new URLSearchParams(window.location.search);
+const urlUid = urlParams.get('uid');
+if (urlUid) {
+  localStorage.setItem('senaFitnessSyncedUid', urlUid);
+  // Clean URL parameter
+  const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+  window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+}
+
 loadStateLocal();
 renderTreinos();
 renderExercicios();
@@ -1204,10 +1263,12 @@ initFoodDatalist();
 fbAuth.signInAnonymously().catch(e=>console.error("Auth error:",e));
 fbAuth.onAuthStateChanged(async user=>{
   if(user){
-    fbUserId=user.uid;
-    await loadRemoteState();
-    renderTreinos();renderCalendario();renderNutricao();
-    toast("Sincronizado na nuvem! ☁️");
+    const syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+    fbUserId = syncedUid || user.uid;
+    
+    updateSyncBadge();
+    setupRemoteListener();
+    toast(syncedUid ? "Sincronizado com Computador! 📱☁️" : "Sincronizado na nuvem! ☁️");
   }
 });
 </script>

@@ -423,6 +423,7 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
         <div class="user-sub">Intermediário · SENA</div>
       </div>
     </div>
+    <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:12px;justify-content:center" onclick="openSyncModal()">📱 Sync Celular</button>
   </div>
 </aside>
 
@@ -1144,6 +1145,38 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
   </div>
 </div>
 
+<div class="modal-overlay" id="syncModal">
+  <div class="modal" style="width: 400px;">
+    <div class="modal-header">
+      <div class="modal-title">📱 Sincronizar Celular</div>
+      <button class="close-btn" onclick="closeModal('syncModal')">✕</button>
+    </div>
+    
+    <div style="text-align: center; margin-bottom: 20px;">
+      <p style="font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5;">
+        Aponte a câmera do seu celular para o QR Code abaixo ou copie o link para sincronizar seus treinos e dieta em tempo real.
+      </p>
+      
+      <div style="background: #ffffff; padding: 16px; border-radius: 16px; display: inline-block; box-shadow: 0 8px 24px rgba(0,0,0,0.2); margin-bottom: 20px;">
+        <img id="syncQrCode" src="" alt="QR Code" style="display: block; width: 180px; height: 180px; border-radius: 8px;" />
+      </div>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+      <label class="form-label" style="margin-bottom: 0;">Link de Sincronização</label>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" id="syncLinkInput" readonly style="flex: 1; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text); font-size: 12px;" onclick="this.select()" />
+        <button class="btn btn-primary btn-sm" onclick="copySyncLink()">Copiar</button>
+      </div>
+      <div id="syncCopySuccess" style="color: var(--accent3); font-size: 12px; display: none; text-align: center; margin-top: 4px;">✓ Link copiado com sucesso!</div>
+    </div>
+    
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button class="btn btn-ghost" style="flex: 1; justify-content: center;" onclick="closeModal('syncModal')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-auth-compat.js"></script>
@@ -1278,21 +1311,80 @@ function saveState(){
   }
 }
 
-async function loadRemoteState() {
-    if(!firebaseUserId) return;
-    try {
-        const docRef = db.collection("users").doc(firebaseUserId);
-        const docSnap = await docRef.get();
-        if (docSnap.exists) {
-            const data = docSnap.data();
-            Object.assign(appState, data);
-            saveStateLocal();
-        } else {
-            await docRef.set(appState);
-        }
-    } catch(e) {
-        console.error("Firebase load error", e);
+let remoteListenerUnsubscribe = null;
+let isFirstLoad = true;
+
+function renderAllState() {
+  buildRoutineTabs();
+  const activeRoutineTab = document.querySelector('.routine-tab.active');
+  const routine = activeRoutineTab ? activeRoutineTab.textContent.trim().slice(-1) : (appState.currentRoutine || 'A');
+  selectRoutine(routine);
+  renderCalendar();
+  renderWeights();
+  renderPhotos();
+  renderMeals();
+  renderGoals();
+  updateMacros();
+  renderDashboard();
+  buildNutritionChart();
+  renderWater();
+}
+
+function setupRemoteListener() {
+  if (!firebaseUserId) return;
+  if (remoteListenerUnsubscribe) {
+    remoteListenerUnsubscribe();
+  }
+  
+  const docRef = db.collection("users").doc(firebaseUserId);
+  
+  remoteListenerUnsubscribe = docRef.onSnapshot((docSnap) => {
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      if (isFirstLoad || JSON.stringify(data) !== JSON.stringify(appState)) {
+        isFirstLoad = false;
+        Object.assign(appState, data);
+        saveStateLocal();
+        renderAllState();
+      }
+    } else {
+      isFirstLoad = false;
+      docRef.set(appState).catch(e => console.error("Firebase init doc error", e));
     }
+  }, (error) => {
+    console.error("Firebase onSnapshot error:", error);
+  });
+}
+
+function openSyncModal() {
+  if (!firebaseUserId) {
+    showToast("Erro: Usuário não autenticado no Firebase.");
+    return;
+  }
+  const syncUrl = `https://faculdades2023-fonte.github.io/Academia2026/mobile.html?uid=${firebaseUserId}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(syncUrl)}`;
+  
+  document.getElementById('syncQrCode').src = qrUrl;
+  document.getElementById('syncLinkInput').value = syncUrl;
+  document.getElementById('syncCopySuccess').style.display = 'none';
+  
+  openModal('syncModal');
+}
+
+function copySyncLink() {
+  const linkInput = document.getElementById('syncLinkInput');
+  linkInput.select();
+  linkInput.setSelectionRange(0, 99999);
+  
+  navigator.clipboard.writeText(linkInput.value).then(() => {
+    const successMsg = document.getElementById('syncCopySuccess');
+    successMsg.style.display = 'block';
+    setTimeout(() => {
+      successMsg.style.display = 'none';
+    }, 3000);
+  }).catch(err => {
+    console.error('Could not copy text: ', err);
+  });
 }
 
 function todayLabel(){
@@ -2777,18 +2869,7 @@ auth.signInAnonymously().catch(err => {
 auth.onAuthStateChanged(async (user) => {
     if(user) {
         firebaseUserId = user.uid;
-        await loadRemoteState();
-        buildRoutineTabs();
-        selectRoutine(appState.currentRoutine||'A');
-        renderCalendar();
-        renderWeights();
-        renderPhotos();
-        renderMeals();
-        renderGoals();
-        updateMacros();
-        renderDashboard();
-        buildNutritionChart();
-        renderWater();
+        setupRemoteListener();
         showToast("Sincronizado na nuvem! ☁️");
     }
 });
