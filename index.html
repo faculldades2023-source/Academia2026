@@ -1361,7 +1361,19 @@ function openSyncModal() {
     showToast("Erro: Usuário não autenticado no Firebase.");
     return;
   }
-  const syncUrl = `https://faculdades2023-fonte.github.io/Academia2026/mobile.html?uid=${firebaseUserId}`;
+  
+  // Constrói o link do mobile.html de forma dinâmica baseada no domínio atual
+  const origin = window.location.origin;
+  let path = window.location.pathname;
+  if (path.endsWith('index.html')) {
+    path = path.replace('index.html', 'mobile.html');
+  } else {
+    if (!path.endsWith('/')) {
+      path += '/';
+    }
+    path += 'mobile.html';
+  }
+  const syncUrl = `${origin}${path}?uid=${firebaseUserId}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(syncUrl)}`;
   
   document.getElementById('syncQrCode').src = qrUrl;
