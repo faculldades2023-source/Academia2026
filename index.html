@@ -1227,9 +1227,24 @@ const firebaseConfig = {
   appId: "1:782938659543:web:0fa38d866e9410323dae92",
   measurementId: "G-SFZN3NE3ME"
 };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
+
+let db = null;
+let auth = null;
+let firebaseLoaded = false;
+
+if (typeof firebase !== 'undefined') {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    auth = firebase.auth();
+    firebaseLoaded = true;
+  } catch(e) {
+    console.error("Firebase initialization failed:", e);
+  }
+} else {
+  console.warn("Firebase SDK not loaded (offline or blocked).");
+}
+
 let firebaseUserId = null;
 // NAV
 function goTo(id,el){
@@ -1331,18 +1346,22 @@ function loadState(){
     appState.calendarSchedule = loadedSchedule;
     appState.calendarRest = loadedRest;
 
-  }catch{
-    localStorage.removeItem(STORAGE_KEY);
+  }catch(e){
+    try { localStorage.removeItem(STORAGE_KEY); } catch(err) {}
   }
 }
 
 function saveStateLocal(){
-  localStorage.setItem(STORAGE_KEY,JSON.stringify(appState));
+  try {
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(appState));
+  } catch(e) {
+    console.error("Local save error:", e);
+  }
 }
 
 function saveState(){
   saveStateLocal();
-  if(firebaseUserId){
+  if(firebaseUserId && db){
     db.collection("users").doc(firebaseUserId).set(appState)
       .catch(e => console.error("Firebase save error", e));
   }
@@ -1476,7 +1495,7 @@ function saveCustomSyncId() {
 }
 
 function updateDesktopPresence() {
-  if (!firebaseUserId) return;
+  if (!firebaseUserId || !db) return;
   const docRef = db.collection("users").doc(firebaseUserId);
   docRef.update({
     lastActiveDesktop: Date.now()
@@ -1489,7 +1508,7 @@ function updateDesktopPresence() {
 setInterval(updateDesktopPresence, 30000);
 
 function setupRemoteListener() {
-  if (!firebaseUserId) return;
+  if (!firebaseUserId || !db) return;
   if (remoteListenerUnsubscribe) {
     remoteListenerUnsubscribe();
   }
@@ -3058,27 +3077,63 @@ renderWater();
 const mdi = document.getElementById('mealDateInput');
 if(mdi) mdi.value = new Date().toISOString().substring(0,10);
 
-auth.signInAnonymously().catch(err => {
-    console.error("Auth error:", err);
-});
+let isSyncInitialized = false;
+function initializeSync(uid) {
+  if (isSyncInitialized) return;
+  isSyncInitialized = true;
+  
+  firebaseUserId = uid;
+  setupRemoteListener();
+  updateSyncUI();
+}
 
-auth.onAuthStateChanged(async (user) => {
-    if(user) {
-        let customId = null;
-        try {
-            customId = localStorage.getItem('senaFitnessCustomUid');
-        } catch(e) {}
-        
-        if (customId) {
-            firebaseUserId = 'custom_' + customId.trim();
-        } else {
-            firebaseUserId = user.uid;
-        }
-        setupRemoteListener();
-        updateSyncUI();
-        showToast("Sincronizado na nuvem! ☁️");
+// 1. Immediate load if custom ID exists
+try {
+  const savedCustomId = localStorage.getItem('senaFitnessCustomUid');
+  if (savedCustomId) {
+    initializeSync('custom_' + savedCustomId.trim());
+  }
+} catch(e) {}
+
+// 2. Setup auth listeners
+if (auth) {
+  auth.signInAnonymously().catch(err => {
+      console.error("Auth error:", err);
+  });
+
+  auth.onAuthStateChanged(async (user) => {
+      if(user) {
+          let customId = null;
+          try {
+              customId = localStorage.getItem('senaFitnessCustomUid');
+          } catch(e) {}
+          
+          if (customId) {
+              initializeSync('custom_' + customId.trim());
+          } else {
+              initializeSync(user.uid);
+          }
+          showToast("Sincronizado na nuvem! ☁️");
+      }
+  });
+}
+
+// 3. Fallback timeout for local access (unauthorized domains)
+setTimeout(() => {
+  if (!isSyncInitialized) {
+    console.warn("Firebase Auth timeout, using local fallback");
+    let customId = null;
+    try {
+      customId = localStorage.getItem('senaFitnessCustomUid');
+    } catch(e) {}
+    
+    if (customId) {
+      initializeSync('custom_' + customId.trim());
+    } else {
+      initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
     }
-});
+  }
+}, 2000);
 </script>
 </body>
 </html>
