@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0f">
+<title>SENA Fitness — Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-auth-compat.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0a0a0f;--bg2:#111118;--bg3:#16161f;--card:#1a1a25;--card2:#1e1e2c;
+  --border:#2a2a3a;--accent:#e8ff47;--accent2:#ff6b35;--accent3:#4fffb0;
+  --text:#f0f0f8;--muted:#6b6b88;--muted2:#44445a;
+  --red:#ff4757;--blue:#4fa3ff;--purple:#b66dff;
+  --nav-h:68px;
+}
+html,body{min-height:100%;background:var(--bg);overflow-x:hidden;overflow-y:auto}
+body{font-family:'DM Sans',sans-serif;color:var(--text);font-size:15px}
+h1,h2,h3{font-family:'Bebas Neue',sans-serif;letter-spacing:.05em}
+#app{min-height:100vh;display:block;position:relative}
+.main-scroll{padding-bottom:calc(var(--nav-h)+40px);padding-top:0}
+.view{display:none;padding:0 16px 16px;animation:fadeUp .28s ease}
+.view.active{display:block}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* HEADER */
+.header{padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--border)}
+.logo-text{font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--accent);letter-spacing:.1em}
+.logo-sub{font-size:9px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase}
+.streak-pill{display:flex;align-items:center;gap:5px;background:rgba(232,255,71,.1);border:1px solid rgba(232,255,71,.2);border-radius:99px;padding:5px 12px;font-size:13px;font-weight:600;color:var(--accent)}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:rgba(17,17,24,.95);backdrop-filter:blur(20px);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;flex:1;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:.2s;border-radius:12px}
+.nav-btn.active{color:var(--accent)}
+.nav-btn .nav-icon{font-size:22px;transition:.2s}
+.nav-btn.active .nav-icon{transform:scale(1.12)}
+.nav-label{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
+.card-accent{border-color:rgba(232,255,71,.3);background:linear-gradient(135deg,rgba(232,255,71,.05),var(--card))}
+.section-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.05em;margin:18px 0 10px}
+
+/* BUTTONS */
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:13px 20px;border-radius:12px;border:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:.2s;min-height:48px}
+.btn-primary{background:var(--accent);color:#0a0a0f}
+.btn-primary:active{transform:scale(.97);opacity:.9}
+.btn-ghost{background:var(--bg3);color:var(--text);border:1px solid var(--border)}
+.btn-ghost:active{opacity:.8}
+.btn-danger{background:rgba(255,71,87,.12);color:var(--red);border:1px solid rgba(255,71,87,.25)}
+.btn-block{width:100%}
+.btn-sm{padding:8px 14px;font-size:13px;min-height:38px;border-radius:9px}
+
+/* STATS GRID */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat-card{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px}
+.stat-label{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.stat-value{font-family:'Bebas Neue',sans-serif;font-size:30px;line-height:1;color:var(--text)}
+.stat-unit{font-size:12px;color:var(--muted);margin-left:3px}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;letter-spacing:.05em;text-transform:uppercase}
+.badge-green{background:rgba(79,255,176,.12);color:var(--accent3)}
+.badge-yellow{background:rgba(232,255,71,.12);color:var(--accent)}
+.badge-orange{background:rgba(255,107,53,.12);color:var(--accent2)}
+.badge-blue{background:rgba(79,163,255,.12);color:var(--blue)}
+.badge-red{background:rgba(255,71,87,.12);color:var(--red)}
+
+/* CHIPS */
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;margin-bottom:14px}
+.chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:5px;padding:7px 14px;border-radius:99px;border:1px solid var(--border);background:var(--bg3);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:.2s;white-space:nowrap;min-height:34px}
+.chip.active{border-color:var(--accent);color:var(--accent);background:rgba(232,255,71,.08)}
+
+/* INPUTS */
+.form-group{margin-bottom:12px}
+.form-label{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;display:block}
+.form-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-family:'DM Sans',sans-serif;font-size:15px;outline:none;transition:.2s;min-height:48px}
+.form-input:focus{border-color:var(--accent)}
+select.form-input{appearance:none}
+
+/* PROGRESS */
+.prog-track{height:6px;background:var(--muted2);border-radius:99px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;transition:width .8s ease}
+
+/* TOAST */
+.toast{position:fixed;bottom:calc(var(--nav-h)+14px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:11px 20px;font-size:14px;font-weight:500;z-index:9999;opacity:0;transition:.3s;color:var(--accent);white-space:nowrap;max-width:90vw;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* OVERLAYS / SHEETS */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:.28s}
+.overlay.open{opacity:1;pointer-events:all}
+.sheet{background:var(--bg2);border-radius:22px 22px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding:18px 18px calc(20px + env(safe-area-inset-bottom));transform:translateY(100%);transition:.32s cubic-bezier(.4,0,.2,1)}
+.overlay.open .sheet{transform:translateY(0)}
+.sheet-handle{width:40px;height:4px;background:var(--muted2);border-radius:99px;margin:0 auto 18px}
+.sheet-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.sheet-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:.04em}
+.close-btn{background:var(--bg3);border:none;color:var(--muted);width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center}
+
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-month{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.05em;color:var(--accent)}
+.cal-arrow{background:var(--bg3);border:none;color:var(--text);padding:8px 14px;border-radius:8px;cursor:pointer;font-size:16px;min-height:36px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-hdr{text-align:center;font-size:9px;font-weight:700;color:var(--muted);padding:5px 0;letter-spacing:.08em}
+.cal-day{aspect-ratio:1;border-radius:9px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--card2);border:1px solid var(--border);cursor:pointer;transition:.15s;position:relative;overflow:hidden}
+.cal-day:active{transform:scale(.92)}
+.cal-day.today{border-color:var(--accent)}
+.cal-day.empty{background:transparent;border:none;pointer-events:none}
+.cal-num{font-size:12px;font-weight:700}
+.cal-dot{width:6px;height:6px;border-radius:50%;margin-top:2px}
+
+/* WORKOUT ITEMS */
+.workout-item{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+.workout-letter{width:44px;height:44px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:24px;color:#0a0a0f;flex-shrink:0}
+.workout-info{flex:1;min-width:0}
+.workout-name{font-weight:600;font-size:14px}
+.workout-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.icon-del{background:none;border:none;color:var(--muted);padding:6px;cursor:pointer;font-size:15px;flex-shrink:0}
+.icon-del:active{color:var(--red)}
+
+/* ACTIVE WORKOUT */
+.active-workout{display:flex;flex-direction:column;gap:16px}
+.active-ex-card{background:var(--card);border:2px solid var(--accent);border-radius:18px;padding:20px;text-align:center;box-shadow:0 0 24px rgba(232,255,71,.1)}
+.active-prog-bar-wrap{height:6px;background:var(--bg3);border-radius:3px;margin-bottom:12px;overflow:hidden}
+.active-prog-bar{height:100%;background:var(--accent);transition:.4s}
+.active-counter{font-size:12px;color:var(--muted);margin-bottom:10px}
+.active-anim{height:160px;background:var(--bg3);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;overflow:hidden}
+.active-ex-title{font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--accent);margin-bottom:4px;letter-spacing:.04em}
+.active-ex-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px}
+.active-ex-prescription{font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--text);margin-bottom:16px}
+.active-controls{display:flex;gap:10px}
+.btn-complete{flex:1;background:var(--accent);color:#0a0a0f;border:none;padding:16px;border-radius:12px;font-weight:700;font-size:16px;cursor:pointer;transition:.2s}
+.btn-complete:active{opacity:.85;transform:scale(.97)}
+.btn-skip{background:var(--bg3);color:var(--muted);border:none;padding:16px 18px;border-radius:12px;font-weight:600;cursor:pointer}
+
+/* EXERCISES */
+.ex-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;cursor:pointer;transition:.15s;margin-bottom:10px;display:flex;align-items:center}
+.ex-card:active{transform:scale(.98)}
+.ex-anim-mini{width:76px;height:76px;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ex-info{padding:12px;flex:1;min-width:0}
+.ex-name{font-weight:600;font-size:13px}
+.ex-muscle{font-size:11px;color:var(--muted);margin-top:2px}
+.ex-machine{font-size:11px;color:var(--accent);margin-top:3px;font-weight:500}
+
+/* MEAL */
+.meal-item{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:9px;display:flex;align-items:center;gap:10px}
+.meal-name{font-weight:600;font-size:13px}
+.meal-time{font-size:11px;color:var(--muted);margin-top:1px}
+.macro-val{font-family:'Bebas Neue',sans-serif;font-size:17px;line-height:1;text-align:center}
+.macro-lbl{font-size:8px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;text-align:center}
+
+/* WATER BOTTLE */
+.bottle-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0}
+.bottle-ml{font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--blue);line-height:1;text-align:center}
+.bottle-sub{font-size:12px;color:var(--muted);text-align:center}
+.water-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.water-add-btn{background:rgba(79,163,255,.12);border:1px solid rgba(79,163,255,.3);color:var(--blue);border-radius:10px;padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;min-height:42px}
+.water-add-btn:active{background:rgba(79,163,255,.25)}
+
+/* ROUTINE SELECTOR */
+.routine-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.routine-btn{border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:12px;padding:10px 6px;cursor:pointer;text-align:center;transition:.2s;font-family:'DM Sans',sans-serif}
+.routine-btn .rl{font-family:'Bebas Neue',sans-serif;font-size:26px;line-height:1}
+.routine-btn .rn{font-size:9px;margin-top:2px;line-height:1.2}
+.routine-btn.active{border-color:var(--accent);color:var(--text);background:rgba(232,255,71,.06)}
+.routine-btn:active{transform:scale(.94)}
+
+/* CALENDAR DAY OPTIONS */
+.cal-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.cal-opt-btn{border:1px solid var(--border);background:var(--card);color:var(--muted);border-radius:12px;padding:14px 10px;cursor:pointer;text-align:center;transition:.2s;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600}
+.cal-opt-btn.active{border-color:var(--accent);color:var(--text);background:rgba(232,255,71,.06)}
+.cal-opt-btn:active{transform:scale(.95)}
+
+/* DIVIDER */
+.divider{height:1px;background:var(--border);margin:14px 0}
+/* EMPTY */
+.empty{text-align:center;padding:36px 20px;color:var(--muted)}
+.empty-icon{font-size:44px;margin-bottom:10px}
+.empty-text{font-size:13px;line-height:1.7}
+/* SCROLLBAR */
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--muted2);border-radius:3px}
+
+/* SVG ANIMATIONS */
+.v-breath{animation:vBreath 2.5s ease-in-out infinite;transform-origin:center bottom}
+@keyframes vBreath{0%,100%{transform:scale(1,1)}50%{transform:scale(.98,1.03)}}
+.v-lift{animation:vLift 2.5s infinite}
+@keyframes vLift{0%,15%{transform:translateY(0);animation-timing-function:cubic-bezier(.2,.8,.2,1)}40%,55%{transform:translateY(-14px)}85%,100%{transform:translateY(0)}}
+.v-pull{animation:vPull 2.5s infinite}
+@keyframes vPull{0%,15%{transform:translateY(0)}40%,55%{transform:translateY(14px)}85%,100%{transform:translateY(0)}}
+.v-squat-anim{animation:vSquat 2.5s infinite;transform-origin:center bottom}
+@keyframes vSquat{0%,15%{transform:scaleY(1) translateY(0)}40%,55%{transform:scaleY(.85) translateY(12px)}85%,100%{transform:scaleY(1) translateY(0)}}
+.v-row{animation:vRow 2.5s infinite}
+@keyframes vRow{0%,15%{transform:translateX(0)}40%,55%{transform:translateX(-14px)}85%,100%{transform:translateX(0)}}
+.v-curl-arm{animation:vCurl 2.5s infinite;transform-origin:60px 65px}
+@keyframes vCurl{0%,15%{transform:rotate(0deg)}40%,55%{transform:rotate(-80deg)}85%,100%{transform:rotate(0deg)}}
+.v-legpress{animation:vLegp 2.5s infinite}
+@keyframes vLegp{0%,15%{transform:translate(0,0)}40%,55%{transform:translate(-14px,14px)}85%,100%{transform:translate(0,0)}}
+.v-pecdeck{animation:vPec 2.5s infinite;transform-origin:60px 40px}
+@keyframes vPec{0%,15%{transform:scaleX(1)}40%,55%{transform:scaleX(.4)}85%,100%{transform:scaleX(1)}}
+.v-tricep-arm{animation:vTri 2.5s infinite;transform-origin:70px 65px}
+@keyframes vTri{0%,15%{transform:rotate(0deg)}40%,55%{transform:rotate(70deg)}85%,100%{transform:rotate(0deg)}}
+.v-lateral-arm-l{animation:vLatL 2.5s infinite;transform-origin:50px 42px}
+.v-lateral-arm-r{animation:vLatR 2.5s infinite;transform-origin:70px 42px}
+@keyframes vLatL{0%,15%{transform:rotate(0deg)}40%,55%{transform:rotate(-75deg)}85%,100%{transform:rotate(0deg)}}
+@keyframes vLatR{0%,15%{transform:rotate(0deg)}40%,55%{transform:rotate(75deg)}85%,100%{transform:rotate(0deg)}}
+.v-cardio{animation:vCard .8s ease-in-out infinite alternate}
+@keyframes vCard{0%{transform:translateY(0)}100%{transform:translateY(-6px)}}
+.v-run-leg-1{animation:vRL1 1.6s infinite;transform-origin:50px 65px}
+.v-run-leg-2{animation:vRL2 1.6s infinite;transform-origin:50px 65px}
+@keyframes vRL1{0%,100%{transform:rotate(-35deg)}50%{transform:rotate(35deg)}}
+@keyframes vRL2{0%,100%{transform:rotate(35deg)}50%{transform:rotate(-35deg)}}
+.v-shrug-anim{animation:vShrug 2.5s infinite;transform-origin:center bottom}
+@keyframes vShrug{0%,15%{transform:translateY(0)}40%,55%{transform:translateY(-5px)}85%,100%{transform:translateY(0)}}
+.v-shrug-arms{animation:vShrugA 2.5s infinite}
+@keyframes vShrugA{0%,15%{transform:translateY(0)}40%,55%{transform:translateY(-10px)}85%,100%{transform:translateY(0)}}
+.v-calf-anim{animation:vCalf 2.5s infinite;transform-origin:center bottom}
+@keyframes vCalf{0%,15%{transform:translateY(0)}40%,55%{transform:translateY(-10px)}85%,100%{transform:translateY(0)}}
+.v-abs-anim{animation:vAbs 2.5s infinite;transform-origin:60px 90px}
+@keyframes vAbs{0%,15%{transform:rotate(0deg)}40%,55%{transform:rotate(35deg)}85%,100%{transform:rotate(0deg)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="logo-text">SENA</div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <span class="logo-sub">Fitness Mobile</span>
+      <span id="sync-badge" class="badge" style="cursor:pointer; font-size:9px; padding:2px 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center;" onclick="openMobileSyncModal()">⚪ Inicializando...</span>
+    </div>
+  </div>
+  <div class="streak-pill" id="header-streak">🔥 0 dias</div>
+</div>
+
+<div class="main-scroll">
+
+<!-- ══════════════════ ABA: TREINOS ══════════════════ -->
+<div class="view active" id="view-treinos">
+  <div style="margin-top:14px">
+    <!-- Card treino de hoje -->
+    <div class="card card-accent" id="today-card">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div id="today-badge" style="width:56px;height:56px;border-radius:13px;background:#3b82f6;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:32px;color:#0a0a0f;flex-shrink:0">A</div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px">Treino de Hoje</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.04em" id="today-name">Peito + Tríceps</div>
+          <div style="font-size:11px;color:var(--muted)" id="today-date"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:14px" onclick="startWorkout()">▶ Iniciar Treino</button>
+    </div>
+
+    <!-- Banner de Sincronização (aparece quando não pareado) -->
+    <div class="card" id="mobile-sync-banner" style="display:none; border-color: rgba(232,255,71,0.25); background: linear-gradient(135deg, rgba(232,255,71,0.04), var(--card)); text-align: center; padding: 16px; margin-bottom: 12px;">
+      <div style="font-size: 13px; margin-bottom: 10px; color: var(--muted); line-height: 1.4;">Você está em modo local. Conecte com o computador para sincronizar seus treinos.</div>
+      <button class="btn btn-ghost btn-sm btn-block" style="border-color: var(--accent); color: var(--accent); font-weight: bold; display: flex; align-items: center; justify-content: center;" onclick="openMobileSyncModal()">☁️ Sincronizar com Computador</button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Esta Semana</div>
+        <div class="stat-value" id="stat-week">0<span class="stat-unit">treinos</span></div>
+        <div class="stat-sub" id="stat-goal">Meta: 4</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Sequência</div>
+        <div class="stat-value" id="stat-streak">0<span class="stat-unit">dias</span></div>
+        <div class="stat-sub" id="stat-best"></div>
+      </div>
+    </div>
+
+    <!-- Progresso semanal -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-weight:600">Progresso Semanal</span>
+        <span class="badge badge-yellow" id="week-pct">0%</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" id="week-prog" style="background:var(--accent);width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:8px">
+        <span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:5px" id="week-dots"></div>
+    </div>
+
+    <!-- Histórico -->
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div class="section-title">📋 Histórico</div>
+    </div>
+    <div id="workout-history"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ ABA: EXERCÍCIOS ══════════════════ -->
+<div class="view" id="view-exercicios">
+  <div style="margin-top:14px">
+    <div class="chips" id="ex-chips">
+      <div class="chip active" data-cat="peito" onclick="filterEx(this)">💪 Peito</div>
+      <div class="chip" data-cat="costas" onclick="filterEx(this)">🏋️ Costas</div>
+      <div class="chip" data-cat="pernas" onclick="filterEx(this)">🦵 Pernas</div>
+      <div class="chip" data-cat="ombro" onclick="filterEx(this)">🔺 Ombro</div>
+      <div class="chip" data-cat="biceps" onclick="filterEx(this)">💪 Bíceps</div>
+      <div class="chip" data-cat="triceps" onclick="filterEx(this)">⚡ Tríceps</div>
+      <div class="chip" data-cat="cardio" onclick="filterEx(this)">🏃 Cardio</div>
+    </div>
+    <div id="ex-list"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ ABA: CALENDÁRIO ══════════════════ -->
+<div class="view" id="view-calendario">
+  <div style="margin-top:14px">
+    <div class="cal-nav">
+      <button class="cal-arrow" onclick="changeMonth(-1)">‹</button>
+      <div class="cal-month" id="cal-lbl">Maio 2026</div>
+      <button class="cal-arrow" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <!-- Legenda -->
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0;font-size:11px">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#3b82f6;display:inline-block"></span>A · Peito+Tríceps</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#7c3aed;display:inline-block"></span>B · Costas+Bíceps</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#f97316;display:inline-block"></span>C · Pernas</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:#10b981;display:inline-block"></span>D · Ombro</span>
+    </div>
+    <!-- Resumo -->
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Concluídos</div><div class="stat-value" id="cal-done">0<span class="stat-unit">treinos</span></div></div>
+      <div class="stat-card"><div class="stat-label">Pendentes</div><div class="stat-value" id="cal-pending">0<span class="stat-unit">treinos</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ ABA: NUTRIÇÃO ══════════════════ -->
+<div class="view" id="view-nutricao">
+  <div style="margin-top:14px">
+    <!-- Macros do dia -->
+    <div class="card card-accent">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:600" id="nutri-date-lbl"></span>
+        <span class="badge badge-yellow" id="nutri-kcal">0 kcal</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center">
+        <div>
+          <div class="macro-val" id="nutri-prot" style="color:var(--blue)">0</div>
+          <div class="macro-lbl">Proteína(g)</div>
+          <div class="prog-track" style="margin-top:5px"><div class="prog-fill" id="pp" style="background:var(--blue);width:0%"></div></div>
+        </div>
+        <div>
+          <div class="macro-val" id="nutri-carb" style="color:var(--accent)">0</div>
+          <div class="macro-lbl">Carb(g)</div>
+          <div class="prog-track" style="margin-top:5px"><div class="prog-fill" id="pc" style="background:var(--accent);width:0%"></div></div>
+        </div>
+        <div>
+          <div class="macro-val" id="nutri-fat" style="color:var(--accent2)">0</div>
+          <div class="macro-lbl">Gordura(g)</div>
+          <div class="prog-track" style="margin-top:5px"><div class="prog-fill" id="pf" style="background:var(--accent2);width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Refeições -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="section-title" style="margin:0">🍽️ Refeições</div>
+      <button class="btn btn-primary btn-sm" onclick="openAddMeal()">+ Adicionar</button>
+    </div>
+    <div id="meal-list"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ ABA: HIDRATAÇÃO ══════════════════ -->
+<div class="view" id="view-hidratacao">
+  <div style="margin-top:14px">
+    <!-- GARRAFA ANIMADA -->
+    <div class="card card-accent">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:600">💧 Hidratação Diária</span>
+        <span class="badge badge-blue" id="water-ml-badge">0 ml</span>
+      </div>
+      <div style="display:flex;gap:20px;align-items:flex-start">
+        <!-- SVG Garrafa -->
+        <div class="bottle-wrap" style="flex-shrink:0">
+          <svg id="waterBottleSvg" width="90" height="198" viewBox="0 0 100 220" style="filter:drop-shadow(0 4px 12px rgba(79,163,255,0.3))">
+            <rect x="36" y="10" width="28" height="18" rx="4" fill="#1e2a3a" stroke="#4fa3ff" stroke-width="1.5"/>
+            <rect x="34" y="4" width="32" height="12" rx="5" fill="#4fa3ff"/>
+            <path d="M22 28 Q18 36 18 50 L18 196 Q18 208 30 208 L70 208 Q82 208 82 196 L82 50 Q82 36 78 28 Z" fill="#0d1b2a" stroke="#4fa3ff" stroke-width="1.5"/>
+            <defs>
+              <clipPath id="bottleClip">
+                <path d="M22 28 Q18 36 18 50 L18 196 Q18 208 30 208 L70 208 Q82 208 82 196 L82 50 Q82 36 78 28 Z"/>
+              </clipPath>
+              <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4fa3ff" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#1a6fc4" stop-opacity="0.95"/>
+              </linearGradient>
+            </defs>
+            <g clip-path="url(#bottleClip)">
+              <rect id="waterFill" x="16" y="208" width="70" height="0" fill="url(#waterGrad)" style="transition:y 0.6s ease,height 0.6s ease"/>
+              <path id="waterWave" d="M16 208 Q33 204 50 208 Q67 212 86 208 L86 220 L16 220 Z" fill="rgba(79,163,255,0.6)" style="transition:transform 0.6s ease">
+                <animateTransform attributeName="transform" type="translate" values="0 0;-34 0;0 0" dur="2s" repeatCount="indefinite"/>
+              </path>
+            </g>
+            <line x1="18" y1="90" x2="26" y2="90" stroke="#4fa3ff" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="28" y="94" font-size="8" fill="#4fa3ff" opacity="0.5">1500</text>
+            <line x1="18" y1="130" x2="26" y2="130" stroke="#4fa3ff" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="28" y="134" font-size="8" fill="#4fa3ff" opacity="0.5">1000</text>
+            <line x1="18" y1="170" x2="26" y2="170" stroke="#4fa3ff" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="28" y="174" font-size="8" fill="#4fa3ff" opacity="0.5">500</text>
+          </svg>
+          <div class="bottle-ml" id="bottle-ml">0</div>
+          <div class="bottle-sub">/ 2000 ml</div>
+        </div>
+        <!-- Controles -->
+        <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+          <div style="background:var(--bg3);border-radius:12px;padding:14px;text-align:center">
+            <div style="font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Total Hoje</div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:40px;color:var(--blue);line-height:1" id="water-total">0</div>
+            <div style="font-size:12px;color:var(--muted)">ml consumidos</div>
+          </div>
+          <div class="water-btns">
+            <button class="water-add-btn" onclick="addWaterMl(150)">+150ml</button>
+            <button class="water-add-btn" onclick="addWaterMl(250)">+250ml</button>
+            <button class="water-add-btn" onclick="addWaterMl(350)">+350ml</button>
+            <button class="water-add-btn" onclick="addWaterMl(500)">+500ml</button>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="number" class="form-input" id="custom-water" placeholder="ml" style="flex:1;min-height:40px;padding:8px 12px;font-size:14px">
+            <button class="btn btn-ghost btn-sm" onclick="addCustomWater()">+</button>
+          </div>
+          <button class="btn btn-danger btn-block btn-sm" style="margin-top:8px" onclick="resetWater()">Zerar água</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main-scroll -->
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="nav-btn active" onclick="switchTab(this,'treinos')">
+    <span class="nav-icon">🏋️</span><span class="nav-label">Treinos</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'exercicios')">
+    <span class="nav-icon">💪</span><span class="nav-label">Exercícios</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'calendario')">
+    <span class="nav-icon">📅</span><span class="nav-label">Calendário</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'nutricao')">
+    <span class="nav-icon">🥩</span><span class="nav-label">Nutrição</span>
+  </button>
+  <button class="nav-btn" onclick="switchTab(this,'hidratacao')">
+    <span class="nav-icon">💧</span><span class="nav-label">Água</span>
+  </button>
+</nav>
+</div><!-- /app -->
+
+<!-- ═══ MODAL: TREINO ATIVO ═══ -->
+<div class="overlay" id="overlay-active">
+  <div class="sheet" style="max-height:100vh;border-radius:22px 22px 0 0">
+    <div class="sheet-handle"></div>
+    <div class="active-workout" id="active-workout-content"></div>
+    <div style="margin-top:16px">
+      <button class="btn btn-danger btn-block" onclick="cancelWorkout()">✕ Cancelar Treino</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: DETALHE EXERCÍCIO ═══ -->
+<div class="overlay" id="overlay-ex" onclick="closeOvBg(event,'overlay-ex')">
+  <div class="sheet">
+    <div class="sheet-handle" onclick="closeOv('overlay-ex')"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="ex-detail-name">Exercício</div>
+      <button class="close-btn" onclick="closeOv('overlay-ex')">✕</button>
+    </div>
+    <div id="ex-detail-anim" style="height:160px;background:var(--bg3);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;overflow:hidden"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <span class="badge badge-blue" id="ex-detail-machine"></span>
+      <span class="badge badge-blue" id="ex-detail-muscle"></span>
+    </div>
+    <div style="font-weight:600;margin-bottom:7px">📋 Execução</div>
+    <div id="ex-detail-exec" style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px"></div>
+    <div style="font-weight:600;margin-bottom:7px">⚠️ Erros comuns</div>
+    <ul id="ex-detail-errors" style="list-style:none;display:flex;flex-direction:column;gap:6px"></ul>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ADICIONAR REFEIÇÃO ═══ -->
+<div class="overlay" id="overlay-meal" onclick="closeOvBg(event,'overlay-meal')">
+  <div class="sheet">
+    <div class="sheet-handle" onclick="closeOv('overlay-meal')"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">Adicionar Refeição</div>
+      <button class="close-btn" onclick="closeOv('overlay-meal')">✕</button>
+    </div>
+    <!-- Busca com autocomplete -->
+    <div class="form-group">
+      <label class="form-label">Alimento (autocomplete)</label>
+      <input type="text" class="form-input" id="food-search" placeholder="Ex: frango, arroz, ovo..." autocomplete="off" list="food-datalist" oninput="onFoodSearch()">
+      <datalist id="food-datalist"></datalist>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group">
+        <label class="form-label">Quantidade</label>
+        <input type="number" class="form-input" id="food-qty" placeholder="100" min="1" oninput="calcFoodMacros()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Unidade</label>
+        <select class="form-input" id="food-unit" onchange="calcFoodMacros()">
+          <option value="g">gramas (g)</option>
+          <option value="un">unidade</option>
+          <option value="ml">ml</option>
+        </select>
+      </div>
+    </div>
+    <!-- Preview automático dos macros -->
+    <div id="food-preview" style="background:var(--bg3);border-radius:12px;padding:14px;margin-bottom:14px;display:none">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Valores calculados</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);text-align:center;gap:6px">
+        <div><div class="macro-val" id="prev-kcal" style="color:var(--accent)">0</div><div class="macro-lbl">kcal</div></div>
+        <div><div class="macro-val" id="prev-prot" style="color:var(--blue)">0</div><div class="macro-lbl">prot(g)</div></div>
+        <div><div class="macro-val" id="prev-carb" style="color:var(--accent)">0</div><div class="macro-lbl">carb(g)</div></div>
+        <div><div class="macro-val" id="prev-fat" style="color:var(--accent2)">0</div><div class="macro-lbl">gord(g)</div></div>
+      </div>
+    </div>
+    <!-- Campos manuais (fallback) -->
+    <details style="margin-bottom:14px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--muted);padding:8px 0">Editar macros manualmente</summary>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <div class="form-group"><label class="form-label">Kcal</label><input type="number" class="form-input" id="meal-kcal" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Proteína(g)</label><input type="number" class="form-input" id="meal-prot" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Carb(g)</label><input type="number" class="form-input" id="meal-carb" placeholder="0" min="0"></div>
+        <div class="form-group"><label class="form-label">Gordura(g)</label><input type="number" class="form-input" id="meal-fat" placeholder="0" min="0"></div>
+      </div>
+    </details>
+    <div class="form-group">
+      <label class="form-label">Horário</label>
+      <input type="time" class="form-input" id="meal-time">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveMeal()">💾 Salvar Refeição</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: CALENDÁRIO - DIA ═══ -->
+<div class="overlay" id="overlay-cal-day" onclick="closeOvBg(event,'overlay-cal-day')">
+  <div class="sheet">
+    <div class="sheet-handle" onclick="closeOv('overlay-cal-day')"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="cal-day-title">Dia</div>
+      <button class="close-btn" onclick="closeOv('overlay-cal-day')">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Toque para adicionar ou remover rotinas deste dia:</div>
+    <div class="cal-options" id="cal-day-options"></div>
+    <div class="divider"></div>
+    <button class="btn btn-danger btn-block btn-sm" onclick="clearCalDay()">🗑 Limpar este dia</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: SINCRONIZAÇÃO ═══ -->
+<div class="overlay" id="overlay-sync-settings" onclick="closeOvBg(event,'overlay-sync-settings')">
+  <div class="sheet">
+    <div class="sheet-handle" onclick="closeOv('overlay-sync-settings')"></div>
+    <div class="sheet-header">
+      <div class="sheet-title">☁️ Sincronização</div>
+      <button class="close-btn" onclick="closeOv('overlay-sync-settings')">✕</button>
+    </div>
+    
+    <div style="display: flex; flex-direction: column; gap: 15px; padding: 5px 0;">
+      <!-- Status da Conexão -->
+      <div style="background: var(--bg-card, rgba(255,255,255,0.03)); padding: 12px; border-radius: 12px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;">
+        <div style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold;">Status da Conexão</div>
+        <div id="mobileSyncStatusText" style="font-size: 14px; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+          ⚪ Carregando...
+        </div>
+        <div id="mobileConnectedIdText" style="font-size: 10px; color: var(--muted); word-break: break-all; margin-top: 2px;">
+          Nenhum dispositivo conectado
+        </div>
+      </div>
+
+      <!-- Configuração de ID -->
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left;">
+        <label class="form-label" style="margin-bottom: 0; font-weight: bold; color: var(--accent);">🔑 Vincular ID Personalizado</label>
+        <p style="font-size: 11px; color: var(--muted); margin: 0; line-height: 1.4;">
+          Digite o mesmo ID definido no computador para parear os dispositivos sem usar QR Code.
+        </p>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <input type="text" class="form-input" id="mobileSyncIdInput" placeholder="Ex: brd_fitness" style="margin-bottom: 0; font-size: 13px; flex: 1; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg3); color: var(--text);" />
+          <button class="btn btn-primary" style="padding: 0 16px; font-size: 12px; height: 38px; display: flex; align-items: center; justify-content: center; font-weight: bold;" onclick="saveMobileSyncId()">Salvar</button>
+        </div>
+      </div>
+      <div class="divider" style="margin: 5px 0;"></div>
+
+      <button class="btn btn-danger btn-block btn-sm" style="display: flex; justify-content: center; align-items: center;" onclick="unlinkMobileDevice()">🗑️ Desvincular e Resetar Sincronização</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── FIREBASE ──────────────────────────────────────────────
+const firebaseConfig={
+  apiKey:"AIzaSyBG87uTSEOpsRPz42E_r_wi6yMI6nHhrLk",
+  authDomain:"projeto-academia-2026.firebaseapp.com",
+  projectId:"projeto-academia-2026",
+  storageBucket:"projeto-academia-2026.firebasestorage.app",
+  messagingSenderId:"782938659543",
+  appId:"1:782938659543:web:0fa38d866e9410323dae92"
+};
+
+let fbDb=null;
+let fbAuth=null;
+let firebaseLoaded=false;
+let firestoreError=false;
+
+if (typeof firebase !== 'undefined') {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    fbDb=firebase.firestore();
+    fbAuth=firebase.auth();
+    firebaseLoaded=true;
+  } catch(e) {
+    console.error("Firebase initialization failed:", e);
+  }
+} else {
+  console.warn("Firebase SDK not loaded (offline or blocked).");
+}
+
+let fbUserId=null;
+
+// ── APPSTATE ─────────────────────────────────────────────
+const STORAGE_KEY='senaFitnessState';
+const appState={
+  weights:[],photos:[],meals:[],goals:[],
+  waterMl:0,waterLog:[],waterDate:'',waterHistory:{},
+  currentRoutine:'A',workoutStarted:false,
+  calendarSchedule:{},calendarRest:[],
+  measurements:[],loads:[],completedWorkouts:[],
+  calendarDate:new Date().toISOString().substring(0,7)
+};
+function loadStateLocal(){
+  try{
+    const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+    Object.assign(appState,{
+      weights:Array.isArray(s.weights)?s.weights:[],
+      photos:Array.isArray(s.photos)?s.photos:[],
+      meals:Array.isArray(s.meals)?s.meals:[],
+      goals:Array.isArray(s.goals)?s.goals:[],
+      waterMl:Number(s.waterMl)||0,
+      waterLog:Array.isArray(s.waterLog)?s.waterLog:[],
+      waterDate:s.waterDate||'',
+      waterHistory:(s.waterHistory&&typeof s.waterHistory==='object')?s.waterHistory:{},
+      currentRoutine:s.currentRoutine||'A',
+      workoutStarted:Boolean(s.workoutStarted),
+      measurements:Array.isArray(s.measurements)?s.measurements:[],
+      loads:Array.isArray(s.loads)?s.loads:[],
+      completedWorkouts:Array.isArray(s.completedWorkouts)?s.completedWorkouts:[],
+      calendarDate:s.calendarDate||new Date().toISOString().substring(0,7),
+      calendarSchedule:(s.calendarSchedule&&typeof s.calendarSchedule==='object')?s.calendarSchedule:{},
+      calendarRest:Array.isArray(s.calendarRest)?s.calendarRest:[]
+    });
+    const t=new Date().toISOString().substring(0,10);
+    if(appState.waterDate!==t){appState.waterMl=0;appState.waterLog=[];appState.waterDate=t;}
+  }catch(e){
+    try { localStorage.removeItem(STORAGE_KEY); } catch(err) {}
+  }
+}
+function saveStateLocal(){
+  try {
+    localStorage.setItem(STORAGE_KEY,JSON.stringify(appState));
+  } catch(e) {
+    console.error("Local save error", e);
+  }
+}
+function saveState(){
+  saveStateLocal();
+  if(fbUserId && fbDb) fbDb.collection("users").doc(fbUserId).set(appState).catch(e=>console.error(e));
+}
+let remoteListenerUnsubscribe = null;
+let isFirstLoad = true;
+let lastRemoteState = null;
+
+function renderAllState() {
+  renderTreinos();
+  renderCalendario();
+  renderNutricao();
+}
+
+function areStatesEqual(state1, state2) {
+  if (!state1 || !state2) return false;
+  const clean = (s) => {
+    const copy = { ...s };
+    delete copy.lastActiveDesktop;
+    delete copy.lastActiveMobile;
+    return JSON.stringify(copy);
+  };
+  return clean(state1) === clean(state2);
+}
+
+function updateSyncBadge() {
+  const syncBadge = document.getElementById('sync-badge');
+  if (!syncBadge) return;
+  
+  let syncedUid = null;
+  try {
+    syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+  } catch(e) {}
+  
+  const syncBanner = document.getElementById('mobile-sync-banner');
+  if (syncBanner) {
+    syncBanner.style.display = syncedUid ? 'none' : 'block';
+  }
+  
+  const statusText = document.getElementById('mobileSyncStatusText');
+  const connectedIdText = document.getElementById('mobileConnectedIdText');
+  const syncInput = document.getElementById('mobileSyncIdInput');
+  
+  if (!firebaseLoaded || firestoreError || !navigator.onLine) {
+    if (syncedUid) {
+      const isCustom = syncedUid.startsWith('custom_');
+      const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid.substring(0, 6);
+      syncBadge.innerHTML = `⚠️ Offline (${displayId})`;
+    } else {
+      syncBadge.innerHTML = `⚠️ Apenas Local`;
+    }
+    syncBadge.style.color = 'var(--red)';
+    syncBadge.style.background = 'rgba(255,71,87,0.1)';
+    syncBadge.style.borderColor = 'var(--red)';
+    
+    if (statusText && connectedIdText) {
+      statusText.innerHTML = `⚠️ Offline (Sem Conexão)`;
+      statusText.style.color = 'var(--red)';
+      if (syncedUid) {
+        const isCustom = syncedUid.startsWith('custom_');
+        const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid;
+        connectedIdText.textContent = `Seu aparelho está pareado com o ID "${displayId}", mas não há conexão com a internet.`;
+        if (syncInput) syncInput.value = isCustom ? displayId : '';
+      } else {
+        connectedIdText.textContent = `Não foi possível conectar aos servidores do Firebase.`;
+        if (syncInput) syncInput.value = '';
+      }
+    }
+    return;
+  }
+  
+  if (syncedUid) {
+    const isCustom = syncedUid.startsWith('custom_');
+    const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid.substring(0, 6);
+    
+    let isDesktopActive = false;
+    if (lastRemoteState && lastRemoteState.lastActiveDesktop) {
+      const elapsed = Date.now() - lastRemoteState.lastActiveDesktop;
+      if (elapsed < 120000) {
+        isDesktopActive = true;
+      }
+    }
+    
+    if (isDesktopActive) {
+      syncBadge.innerHTML = `🟢 Sincronizado (${displayId})`;
+      syncBadge.style.color = '#10b981';
+      syncBadge.style.background = 'rgba(16, 185, 129, 0.1)';
+      syncBadge.style.borderColor = '#10b981';
+    } else {
+      syncBadge.innerHTML = `☁️ Sincronizado (${displayId})`;
+      syncBadge.style.color = 'var(--muted)';
+      syncBadge.style.background = 'rgba(255,255,255,0.05)';
+      syncBadge.style.borderColor = 'var(--border)';
+    }
+  } else {
+    syncBadge.innerHTML = `⚠️ Não Sincronizado`;
+    syncBadge.style.color = 'var(--muted)';
+    syncBadge.style.background = 'rgba(255,255,255,0.05)';
+    syncBadge.style.borderColor = 'var(--border)';
+  }
+  
+  if (statusText && connectedIdText) {
+    if (syncedUid) {
+      const isCustom = syncedUid.startsWith('custom_');
+      const displayId = isCustom ? syncedUid.replace('custom_', '') : syncedUid;
+      
+      let isDesktopActive = false;
+      if (lastRemoteState && lastRemoteState.lastActiveDesktop) {
+        const elapsed = Date.now() - lastRemoteState.lastActiveDesktop;
+        if (elapsed < 120000) isDesktopActive = true;
+      }
+      
+      if (isDesktopActive) {
+        statusText.innerHTML = `🟢 Sincronizado com Computador`;
+        statusText.style.color = '#10b981';
+      } else {
+        statusText.innerHTML = `☁️ Pareado (Nuvem)`;
+        statusText.style.color = '#ffffff';
+      }
+      connectedIdText.textContent = `ID Pareado: ${displayId}`;
+      if (syncInput) syncInput.value = isCustom ? displayId : '';
+    } else {
+      statusText.innerHTML = `⚠️ Apenas Local`;
+      statusText.style.color = 'var(--muted)';
+      connectedIdText.textContent = `Seus dados estão sendo salvos apenas localmente neste aparelho.`;
+      if (syncInput) syncInput.value = '';
+    }
+  }
+}
+
+function openMobileSyncModal() {
+  updateSyncBadge();
+  openOv('overlay-sync-settings');
+}
+
+function saveMobileSyncId() {
+  const input = document.getElementById('mobileSyncIdInput');
+  if (!input) return;
+  const rawId = input.value.trim();
+  
+  if (!rawId) {
+    toast("Digite um ID válido.");
+    return;
+  }
+  
+  const cleanId = rawId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (cleanId.length < 3) {
+    toast("ID deve ter pelo menos 3 caracteres.");
+    return;
+  }
+  
+  try {
+    localStorage.setItem('senaFitnessSyncedUid', 'custom_' + cleanId);
+  } catch(e) {}
+  
+  toast("ID vinculado! Carregando...");
+  closeOv('overlay-sync-settings');
+  setTimeout(() => {
+    window.location.reload();
+  }, 1200);
+}
+
+function unlinkMobileDevice() {
+  if (confirm("Deseja desvincular seu celular do computador? Seus dados voltarão a ser independentes.")) {
+    try {
+      localStorage.removeItem('senaFitnessSyncedUid');
+    } catch(e) {}
+    toast("Dispositivo desvinculado. Recarregando...");
+    closeOv('overlay-sync-settings');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+  }
+}
+
+function updateMobilePresence() {
+  if (!fbUserId || !fbDb) return;
+  const ref = fbDb.collection("users").doc(fbUserId);
+  ref.update({
+    lastActiveMobile: Date.now()
+  }).catch(() => {
+    saveState();
+  });
+}
+// Run presence check
+setInterval(updateMobilePresence, 30000);
+
+function setupRemoteListener() {
+  if (!fbUserId || !fbDb) return;
+  if (remoteListenerUnsubscribe) {
+    remoteListenerUnsubscribe();
+  }
+  
+  const ref = fbDb.collection("users").doc(fbUserId);
+  
+  remoteListenerUnsubscribe = ref.onSnapshot((docSnap) => {
+    firestoreError = false;
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      lastRemoteState = data;
+      updateSyncBadge();
+      
+      if (isFirstLoad || !areStatesEqual(data, appState)) {
+        isFirstLoad = false;
+        Object.assign(appState, data);
+        saveStateLocal();
+        renderAllState();
+      } else {
+        appState.lastActiveDesktop = data.lastActiveDesktop;
+        appState.lastActiveMobile = data.lastActiveMobile;
+      }
+    } else {
+      isFirstLoad = false;
+      ref.set(appState).catch(e => console.error("FB init doc error", e));
+    }
+  }, (error) => {
+    console.error("Firebase onSnapshot error:", error);
+    firestoreError = true;
+    updateSyncBadge();
+  });
+}
+
+// ── ROTINAS ───────────────────────────────────────────────
+const ROUTINE_COLORS={A:'#3b82f6',B:'#7c3aed',C:'#f97316',D:'#10b981'};
+const routines={
+  A:{name:'Peito + Tríceps',time:'45-60',exercises:[
+    {name:'Supino máquina ou reto',muscle:'Peito',machine:'Máquina ou barra',sets:'3x',reps:'10-12',svgType:'bench'},
+    {name:'Peck deck (voador)',muscle:'Peito',machine:'Peck deck',sets:'3x',reps:'12',svgType:'pecdeck'},
+    {name:'Supino inclinado máquina',muscle:'Peito',machine:'Máquina inclinada',sets:'3x',reps:'10',svgType:'bench'},
+    {name:'Tríceps pulley',muscle:'Tríceps',machine:'Polia alta',sets:'3x',reps:'12',svgType:'tricep'},
+    {name:'Tríceps corda',muscle:'Tríceps',machine:'Polia com corda',sets:'3x',reps:'12',svgType:'tricep'},
+    {name:'Abdômen',muscle:'Core',machine:'Solo ou banco',sets:'3x',reps:'15-20',svgType:'abs'},
+  ]},
+  B:{name:'Costas + Bíceps',time:'45-60',exercises:[
+    {name:'Puxada frontal (pulley)',muscle:'Costas',machine:'Polia alta',sets:'3x',reps:'10-12',svgType:'lat'},
+    {name:'Remada baixa',muscle:'Costas',machine:'Polia baixa',sets:'3x',reps:'12',svgType:'row'},
+    {name:'Remada máquina',muscle:'Costas',machine:'Remada articulada',sets:'3x',reps:'10',svgType:'row'},
+    {name:'Pulldown puxada fechada',muscle:'Costas',machine:'Polia alta',sets:'3x',reps:'12',svgType:'lat'},
+    {name:'Rosca máquina',muscle:'Bíceps',machine:'Máquina de rosca',sets:'3x',reps:'12',svgType:'curl'},
+    {name:'Rosca martelo',muscle:'Bíceps',machine:'Halteres',sets:'3x',reps:'12',svgType:'curl'},
+  ]},
+  C:{name:'Pernas',time:'50-65',exercises:[
+    {name:'Leg press',muscle:'Pernas',machine:'Leg press',sets:'4x',reps:'12',svgType:'legpress'},
+    {name:'Cadeira extensora',muscle:'Pernas',machine:'Extensora',sets:'3x',reps:'12',svgType:'squat'},
+    {name:'Mesa flexora',muscle:'Pernas',machine:'Flexora',sets:'3x',reps:'12',svgType:'legpress'},
+    {name:'Agachamento Smith',muscle:'Pernas',machine:'Smith',sets:'3x',reps:'10',svgType:'squat'},
+    {name:'Panturrilha máquina',muscle:'Panturrilha',machine:'Máquina sentado',sets:'4x',reps:'15-20',svgType:'calf'},
+    {name:'Abdômen',muscle:'Core',machine:'Solo ou banco',sets:'3x',reps:'15-20',svgType:'abs'},
+  ]},
+  D:{name:'Ombro + Complementos',time:'35-50',exercises:[
+    {name:'Desenvolvimento máquina',muscle:'Ombro',machine:'Máquina',sets:'3x',reps:'10',svgType:'shoulder'},
+    {name:'Elevação lateral',muscle:'Ombro',machine:'Halteres',sets:'3x',reps:'12',svgType:'lateral'},
+    {name:'Crucifixo invertido',muscle:'Ombro',machine:'Máquina',sets:'3x',reps:'12',svgType:'pecdeck'},
+    {name:'Encolhimento',muscle:'Trapézio',machine:'Halteres',sets:'3x',reps:'12',svgType:'shrug'},
+    {name:'Cardio leve',muscle:'Cardio',machine:'Esteira',sets:'10-15',reps:'min',svgType:'cardio'},
+  ]}
+};
+
+// ── BIBLIOTECA EXERCÍCIOS ─────────────────────────────────
+const exerciseLib=[
+  {cat:'peito',name:'Supino Reto na Máquina',muscle:'Peito',machine:'SENA Chest Press',exec:'Sente-se com as costas apoiadas. Empurre as alças para frente estendendo os braços. Retorne controladamente.',err:['Arquear excessivamente as costas','Soltar o peso rápido'],svgType:'bench',color:'#3b82f6'},
+  {cat:'peito',name:'Peck Deck (Voador)',muscle:'Peito',machine:'SENA Pectoral Fly',exec:'Mantenha os cotovelos alinhados com o peito. Feche os braços contraindo o peitoral.',err:['Usar muito impulso','Cotovelos muito baixos'],svgType:'pecdeck',color:'#3b82f6'},
+  {cat:'costas',name:'Puxada Frontal',muscle:'Costas',machine:'SENA Lat Pulldown',exec:'Puxe a barra em direção ao peito superior, juntando as escápulas.',err:['Puxar atrás da nuca','Balançar o tronco'],svgType:'lat',color:'#7c3aed'},
+  {cat:'costas',name:'Remada Sentada',muscle:'Costas',machine:'SENA Seated Row',exec:'Puxe o triângulo até o abdômen, mantendo a postura ereta.',err:['Curvar as costas'],svgType:'row',color:'#7c3aed'},
+  {cat:'pernas',name:'Leg Press 45°',muscle:'Quadríceps/Glúteos',machine:'SENA Leg Press',exec:'Empurre a plataforma sem estender totalmente os joelhos.',err:['Travar os joelhos','Descolar a lombar'],svgType:'legpress',color:'#f97316'},
+  {cat:'pernas',name:'Cadeira Extensora',muscle:'Quadríceps',machine:'SENA Leg Extension',exec:'Estenda as pernas controladamente. Segure 1s no topo.',err:['Levantar o quadril'],svgType:'squat',color:'#f97316'},
+  {cat:'ombro',name:'Desenvolvimento Máquina',muscle:'Ombros',machine:'SENA Shoulder Press',exec:'Empurre o peso para cima. Desça até a altura das orelhas.',err:['Descer demais'],svgType:'shoulder',color:'#10b981'},
+  {cat:'ombro',name:'Elevação Lateral',muscle:'Deltoide Lateral',machine:'Halteres',exec:'Eleve os braços lateralmente até a altura do ombro.',err:['Usar momentum','Levantar acima do ombro'],svgType:'lateral',color:'#10b981'},
+  {cat:'biceps',name:'Rosca Scott Máquina',muscle:'Bíceps',machine:'SENA Preacher Curl',exec:'Apoie o tríceps. Flexione os braços isolando o bíceps.',err:['Tirar os cotovelos do apoio'],svgType:'curl',color:'#eab308'},
+  {cat:'triceps',name:'Tríceps Pulley',muscle:'Tríceps',machine:'Polia Alta',exec:'Estenda os braços para baixo mantendo cotovelos colados ao corpo.',err:['Afastar cotovelos'],svgType:'tricep',color:'#ef4444'},
+  {cat:'cardio',name:'Corrida na Esteira',muscle:'Cardio',machine:'Esteira SENA',exec:'Aqueça em velocidade leve, aumente gradualmente.',err:['Segurar no corrimão','Passadas muito longas'],svgType:'cardio',color:'#4fffb0'},
+];
+
+// ── BANCO DE ALIMENTOS ────────────────────────────────────
+const foodDb=[
+  {keys:['arroz branco cozido','arroz branco','arroz'],unit:'g',p:.025,c:.281,g:.002,kcal:1.242},
+  {keys:['arroz integral cozido','arroz integral'],unit:'g',p:.026,c:.258,g:.01,kcal:1.226},
+  {keys:['feijão carioca cozido','feijão carioca','feijão'],unit:'g',p:.048,c:.136,g:.005,kcal:.781},
+  {keys:['feijão preto cozido','feijão preto'],unit:'g',p:.045,c:.14,g:.005,kcal:.785},
+  {keys:['lentilha cozida','lentilha'],unit:'g',p:.063,c:.163,g:.005,kcal:.949},
+  {keys:['aveia em flocos','aveia'],unit:'g',p:.139,c:.666,g:.085,kcal:3.985},
+  {keys:['quinoa cozida','quinoa'],unit:'g',p:.044,c:.213,g:.019,kcal:1.199},
+  {keys:['tapioca'],unit:'g',p:.003,c:.875,g:.002,kcal:3.53},
+  {keys:['macarrão cozido','macarrão'],unit:'g',p:.05,c:.25,g:.011,kcal:1.299},
+  {keys:['pão branco'],unit:'un',p:.094,c:.49,g:.032,kcal:2.624},
+  {keys:['pão integral','pão'],unit:'un',p:.076,c:.399,g:.03,kcal:2.17},
+  {keys:['batata inglesa cozida','batata inglesa','batata'],unit:'g',p:.012,c:.119,g:.0,kcal:.524},
+  {keys:['batata-doce cozida','batata-doce','batata doce'],unit:'g',p:.006,c:.184,g:.001,kcal:.769},
+  {keys:['cuscuz'],unit:'g',p:.02,c:.25,g:.007,kcal:1.143},
+  {keys:['peito de frango grelhado','peito de frango','frango grelhado','frango'],unit:'g',p:.32,c:.0,g:.025,kcal:1.505},
+  {keys:['coxa de frango','coxa frango'],unit:'g',p:.26,c:.0,g:.1,kcal:1.94},
+  {keys:['carne bovina magra','carne bovina','carne'],unit:'g',p:.324,c:.0,g:.155,kcal:2.691},
+  {keys:['patinho'],unit:'g',p:.35,c:.0,g:.06,kcal:1.94},
+  {keys:['carne moída'],unit:'g',p:.26,c:.0,g:.15,kcal:2.39},
+  {keys:['salmão'],unit:'g',p:.204,c:.0,g:.134,kcal:2.022},
+  {keys:['tilápia'],unit:'g',p:.26,c:.0,g:.027,kcal:1.283},
+  {keys:['atum'],unit:'g',p:.29,c:.0,g:.01,kcal:1.25},
+  {keys:['sardinha'],unit:'g',p:.25,c:.0,g:.11,kcal:1.99},
+  {keys:['ovo cozido','ovo inteiro','ovo','ovos'],unit:'un',p:.133,c:.006,g:.095,kcal:1.411},
+  {keys:['clara de ovo','clara'],unit:'un',p:.11,c:.007,g:.002,kcal:.486},
+  {keys:['tofu'],unit:'g',p:.066,c:.021,g:.04,kcal:.708},
+  {keys:['leite integral','leite'],unit:'ml',p:.032,c:.05,g:.033,kcal:.625},
+  {keys:['leite desnatado'],unit:'ml',p:.034,c:.05,g:.002,kcal:.354},
+  {keys:['iogurte natural','iogurte'],unit:'g',p:.041,c:.019,g:.03,kcal:.51},
+  {keys:['queijo muçarela','queijo mussarela'],unit:'g',p:.226,c:.03,g:.252,kcal:3.292},
+  {keys:['ricota'],unit:'g',p:.126,c:.038,g:.081,kcal:1.385},
+  {keys:['queijo cottage','cottage'],unit:'g',p:.11,c:.03,g:.04,kcal:.92},
+  {keys:['whey protein','whey'],unit:'g',p:.75,c:.08,g:.06,kcal:3.86},
+  {keys:['banana'],unit:'un',p:.011,c:.245,g:.002,kcal:1.044},
+  {keys:['maçã'],unit:'un',p:.003,c:.14,g:.002,kcal:.59},
+  {keys:['laranja'],unit:'un',p:.01,c:.089,g:.001,kcal:.405},
+  {keys:['mamão'],unit:'g',p:.005,c:.11,g:.001,kcal:.469},
+  {keys:['manga'],unit:'g',p:.008,c:.15,g:.004,kcal:.668},
+  {keys:['morango'],unit:'g',p:.007,c:.077,g:.003,kcal:.363},
+  {keys:['abacate'],unit:'g',p:.015,c:.075,g:.115,kcal:1.395},
+  {keys:['amendoim'],unit:'g',p:.26,c:.16,g:.49,kcal:6.09},
+  {keys:['pasta de amendoim'],unit:'g',p:.25,c:.2,g:.5,kcal:6.3},
+  {keys:['castanha de caju','castanha caju'],unit:'g',p:.18,c:.3,g:.44,kcal:5.88},
+  {keys:['castanha-do-pará','castanha do para','castanha'],unit:'g',p:.14,c:.12,g:.66,kcal:6.98},
+  {keys:['amêndoas','amendoas'],unit:'g',p:.21,c:.21,g:.5,kcal:6.18},
+  {keys:['chia'],unit:'g',p:.17,c:.42,g:.31,kcal:5.15},
+  {keys:['azeite'],unit:'ml',p:.0,c:.0,g:1.0,kcal:9.0},
+  {keys:['manteiga'],unit:'g',p:.01,c:.0,g:.81,kcal:7.33},
+];
+
+const unitWeights={ovo:50,banana:100,'maçã':130,laranja:130,'pão':50,pao:50,whey:30};
+
+// ── SVG ANIMATIONS ────────────────────────────────────────
+function vectorSvg(type,color){
+  const c=`style="color:${color}"`;
+  const s={
+    bench:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><rect x="15" y="80" width="90" height="10" rx="4" fill="#2a2a3a"/><circle cx="85" cy="74" r="10" fill="#ffb48f"/><rect x="30" y="68" width="50" height="18" rx="9" fill="currentColor"/><g class="v-lift"><path d="M70 75 L65 50" stroke="#ffb48f" stroke-width="8" stroke-linecap="round"/><rect x="15" y="46" width="90" height="6" rx="3" fill="#888"/><rect x="25" y="30" width="8" height="38" rx="2" fill="#222"/><rect x="87" y="30" width="8" height="38" rx="2" fill="#222"/></g></g></svg>`,
+    squat:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-squat-anim"><g class="v-lift"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><rect x="15" y="27" width="90" height="6" rx="3" fill="#888"/><rect x="20" y="10" width="10" height="40" rx="3" fill="#222"/><rect x="90" y="10" width="10" height="40" rx="3" fill="#222"/></g><path d="M55 70 L45 95 L55 115" stroke="#1e1e2c" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M65 70 L75 95 L65 115" stroke="#1e1e2c" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g></svg>`,
+    lat:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="35" r="10" fill="#ffb48f"/><rect x="50" y="47" width="20" height="35" rx="8" fill="currentColor"/><g class="v-pull"><path d="M55 52 L35 25" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><path d="M65 52 L85 25" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><rect x="20" y="20" width="80" height="6" rx="3" fill="#888"/></g></g></svg>`,
+    row:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="45" cy="35" r="10" fill="#ffb48f"/><rect x="35" y="47" width="20" height="35" rx="8" fill="currentColor"/><g class="v-row"><path d="M45 55 L75 65" stroke="#ffb48f" stroke-width="8" stroke-linecap="round"/><circle cx="78" cy="65" r="5" fill="#888"/><line x1="78" y1="65" x2="100" y2="65" stroke="#6b6b88" stroke-width="4"/></g></g></svg>`,
+    legpress:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="35" cy="55" r="10" fill="#ffb48f"/><rect x="25" y="67" width="20" height="35" rx="8" fill="currentColor" transform="rotate(-30 35 67)"/><g class="v-legpress"><path d="M60 85 L80 80 L90 50" stroke="#ffb48f" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="85" y="20" width="10" height="50" rx="3" fill="#888"/></g></g></svg>`,
+    pecdeck:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><g class="v-pecdeck"><path d="M55 45 L30 45 L30 20" stroke="#ffb48f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M65 45 L90 45 L90 20" stroke="#ffb48f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g></g></svg>`,
+    tricep:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><rect x="90" y="10" width="10" height="100" rx="4" fill="#2a2a3a"/><line x1="60" y1="45" x2="70" y2="65" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><g class="v-tricep-arm"><line x1="70" y1="65" x2="85" y2="45" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/></g></g></svg>`,
+    lateral:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><g class="v-lateral-arm-l"><line x1="50" y1="42" x2="30" y2="60" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><rect x="25" y="55" width="10" height="15" rx="2" fill="#222"/></g><g class="v-lateral-arm-r"><line x1="70" y1="42" x2="90" y2="60" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><rect x="85" y="55" width="10" height="15" rx="2" fill="#222"/></g></g></svg>`,
+    shoulder:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><g class="v-lift"><path d="M55 42 L35 42 L35 20" stroke="#ffb48f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M65 42 L85 42 L85 20" stroke="#ffb48f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><rect x="25" y="10" width="20" height="10" rx="3" fill="#222"/><rect x="75" y="10" width="20" height="10" rx="3" fill="#222"/></g></g></svg>`,
+    curl:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-breath"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><line x1="60" y1="42" x2="60" y2="65" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><g class="v-curl-arm"><line x1="60" y1="65" x2="85" y2="65" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><rect x="80" y="55" width="10" height="20" rx="3" fill="#222"/></g></g></svg>`,
+    cardio:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-cardio"><circle cx="50" cy="25" r="10" fill="#ffb48f"/><rect x="40" y="37" width="20" height="30" rx="8" fill="currentColor"/><g class="v-run-leg-1"><line x1="50" y1="65" x2="40" y2="95" stroke="#1e1e2c" stroke-width="10" stroke-linecap="round"/></g><g class="v-run-leg-2"><line x1="50" y1="65" x2="60" y2="95" stroke="#1e1e2c" stroke-width="10" stroke-linecap="round"/></g></g></svg>`,
+    shrug:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-shrug-anim"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><g class="v-shrug-arms"><line x1="50" y1="42" x2="40" y2="70" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><line x1="70" y1="42" x2="80" y2="70" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><rect x="35" y="65" width="10" height="20" rx="2" fill="#222"/><rect x="75" y="65" width="10" height="20" rx="2" fill="#222"/></g></g></svg>`,
+    calf:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-calf-anim"><circle cx="60" cy="25" r="10" fill="#ffb48f"/><rect x="50" y="37" width="20" height="35" rx="8" fill="currentColor"/><line x1="50" y1="42" x2="40" y2="60" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/><line x1="70" y1="42" x2="80" y2="60" stroke="#ffb48f" stroke-width="7" stroke-linecap="round"/></g><rect x="40" y="110" width="40" height="10" rx="3" fill="#2a2a3a"/></svg>`,
+    abs:`<svg width="100%" height="100%" viewBox="0 0 120 120" fill="none" ${c}><g class="v-abs-anim"><rect x="20" y="90" width="80" height="10" rx="4" fill="#2a2a3a"/><circle cx="25" cy="80" r="10" fill="#ffb48f"/><rect x="35" y="75" width="35" height="15" rx="7" fill="currentColor"/><path d="M55 80 L40 70 L25 75" stroke="#ffb48f" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g></svg>`
+  };
+  return s[type]||s.bench;
+}
+
+// ── UTILIDADES ────────────────────────────────────────────
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=type==='err'?'var(--red)':'var(--accent)';
+  t.style.color=type==='err'?'var(--red)':'var(--accent)';
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'),3200);
+}
+function todayStr(){return new Date().toISOString().substring(0,10);}
+function nowTime(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
+function openOv(id){document.getElementById(id).classList.add('open');}
+function closeOv(id){document.getElementById(id).classList.remove('open');}
+function closeOvBg(e,id){if(e.target.id===id)closeOv(id);}
+function norm(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+
+// ── NAVEGAÇÃO ─────────────────────────────────────────────
+let currentTab='treinos';
+function switchTab(btn,view){
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('view-'+view).classList.add('active');
+  currentTab=view;
+  window.scrollTo({top: 0});
+  if(view==='treinos')renderTreinos();
+  if(view==='exercicios')renderExercicios();
+  if(view==='calendario')renderCalendario();
+  if(view==='nutricao')renderNutricao();
+  if(view==='hidratacao')renderWater();
+}
+
+// ── ABA: TREINOS ──────────────────────────────────────────
+function calcStreak(){
+  const dates=[...new Set(appState.completedWorkouts.map(w=>w.date))].sort().reverse();
+  if(!dates.length)return 0;
+  let streak=0,check=new Date();check.setHours(0,0,0,0);
+  for(const d of dates){
+    const dd=new Date(d+'T12:00:00');dd.setHours(0,0,0,0);
+    const diff=Math.round((check-dd)/(86400000));
+    if(diff===0||diff===1){streak++;check=dd;}else break;
+  }
+  return streak;
+}
+
+function renderTreinos(){
+  const r=appState.currentRoutine||'A';
+  const rt=routines[r];
+  document.getElementById('today-badge').textContent=r;
+  document.getElementById('today-badge').style.background=ROUTINE_COLORS[r];
+  document.getElementById('today-name').textContent=rt.name;
+  document.getElementById('today-date').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});
+
+  const today=new Date();const ws=new Date(today);ws.setDate(today.getDate()-today.getDay()+1);ws.setHours(0,0,0,0);
+  const weekW=appState.completedWorkouts.filter(w=>new Date(w.date)>=ws&&new Date(w.date)<=today);
+  const streak=calcStreak();
+  document.getElementById('stat-week').innerHTML=`${weekW.length}<span class="stat-unit">treinos</span>`;
+  document.getElementById('stat-streak').innerHTML=`${streak}<span class="stat-unit">dias</span>`;
+  document.getElementById('header-streak').textContent=`🔥 ${streak} dias`;
+  const goal=4,pct=Math.min(100,Math.round((weekW.length/goal)*100));
+  document.getElementById('week-prog').style.width=pct+'%';
+  document.getElementById('week-pct').textContent=pct+'%';
+
+  // Dots semana
+  const dots=document.getElementById('week-dots');dots.innerHTML='';
+  for(let i=0;i<7;i++){
+    const d=new Date(ws);d.setDate(ws.getDate()+i);
+    const dStr=d.toISOString().substring(0,10);
+    const done=appState.completedWorkouts.some(w=>w.date===dStr);
+    const isPast=d<=today;
+    const dot=document.createElement('div');
+    dot.style.cssText=`width:11px;height:11px;border-radius:50%;background:${done?'var(--accent)':isPast?'var(--muted2)':'var(--border)'}`;
+    dots.appendChild(dot);
+  }
+
+  // Histórico
+  const list=document.getElementById('workout-history');
+  const recent=[...appState.completedWorkouts].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,10);
+  if(!recent.length){
+    list.innerHTML=`<div class="empty"><div class="empty-icon">🏋️</div><div class="empty-text">Nenhum treino registrado ainda.<br>Toque em "▶ Iniciar Treino" para começar!</div></div>`;return;
+  }
+  list.innerHTML=recent.map(w=>{
+    const rt2=routines[w.routine]||{name:'Treino',time:'?'};
+    return `<div class="workout-item">
+      <div class="workout-letter" style="background:${ROUTINE_COLORS[w.routine]||'#888'}">${w.routine}</div>
+      <div class="workout-info">
+        <div class="workout-name">${rt2.name}</div>
+        <div class="workout-meta">${new Date(w.date+'T12:00:00').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'short'})}</div>
+      </div>
+      <button class="icon-del" onclick="delWorkout('${w.date}','${w.routine}')">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function delWorkout(date,routine){
+  if(!confirm('Remover este treino?'))return;
+  const idx=appState.completedWorkouts.findIndex(w=>w.date===date&&w.routine===routine);
+  if(idx>-1)appState.completedWorkouts.splice(idx,1);
+  saveState();renderTreinos();toast('Treino removido');
+}
+
+// ── TREINO ATIVO ──────────────────────────────────────────
+let activeIdx=0,activeExs=[],activeKey='A';
+
+function startWorkout(){
+  const r=appState.currentRoutine||'A';
+  activeKey=r;activeIdx=0;
+  activeExs=routines[r].exercises;
+  appState.workoutStarted=true;saveState();
+  renderActiveEx();
+  openOv('overlay-active');
+}
+
+function renderActiveEx(){
+  const ex=activeExs[activeIdx];if(!ex)return;
+  const total=activeExs.length;
+  const pct=Math.round((activeIdx/total)*100);
+  const col=ROUTINE_COLORS[activeKey]||'var(--accent)';
+  document.getElementById('active-workout-content').innerHTML=`
+    <div class="active-ex-card">
+      <div class="active-prog-bar-wrap"><div class="active-prog-bar" style="width:${pct}%"></div></div>
+      <div class="active-counter">Exercício ${activeIdx+1} de ${total}</div>
+      <div class="active-anim">${vectorSvg(ex.svgType||'bench',col)}</div>
+      <div class="active-ex-title" style="color:${col}">${ex.name}</div>
+      <div class="active-ex-desc">${ex.muscle} · ${ex.machine}</div>
+      <div class="active-ex-prescription">${ex.sets} × ${ex.reps}</div>
+      <div class="active-controls">
+        <button class="btn-skip" onclick="skipEx()">Pular</button>
+        <button class="btn-complete" onclick="completeEx()">✅ Concluído</button>
+      </div>
+    </div>`;
+}
+
+function completeEx(){
+  activeIdx++;
+  if(activeIdx>=activeExs.length){finishWorkout(true);}
+  else{renderActiveEx();toast('Exercício concluído! 🔥');}
+}
+function skipEx(){
+  activeIdx++;
+  if(activeIdx>=activeExs.length){finishWorkout(false);}
+  else renderActiveEx();
+}
+function cancelWorkout(){
+  if(!confirm('Cancelar o treino?'))return;
+  appState.workoutStarted=false;saveState();
+  closeOv('overlay-active');toast('Treino cancelado');
+}
+function finishWorkout(completed){
+  if(completed){
+    const today=todayStr();
+    const muscles=routines[activeKey].exercises.map(e=>e.muscle);
+    const unique=[...new Set(muscles)];
+    appState.completedWorkouts.push({date:today,routine:activeKey,muscles:unique});
+    saveState();toast('Treino concluído! 🏆');
+  }
+  appState.workoutStarted=false;saveState();
+  closeOv('overlay-active');
+  renderTreinos();
+}
+
+// ── ABA: EXERCÍCIOS ───────────────────────────────────────
+let currentExCat='peito';
+function filterEx(chip){
+  document.querySelectorAll('#ex-chips .chip').forEach(c=>c.classList.remove('active'));
+  chip.classList.add('active');
+  currentExCat=chip.dataset.cat;
+  renderExercicios();
+}
+function renderExercicios(){
+  const filtered=exerciseLib.filter(e=>e.cat===currentExCat);
+  const list=document.getElementById('ex-list');
+  if(!filtered.length){list.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum exercício nesta categoria.</div></div>';return;}
+  list.innerHTML=filtered.map(ex=>`
+    <div class="ex-card" onclick="openExDetail('${ex.name.replace(/'/g,"\\'")}')">
+      <div class="ex-anim-mini">${vectorSvg(ex.svgType,ex.color)}</div>
+      <div class="ex-info">
+        <div class="ex-name">${ex.name}</div>
+        <div class="ex-muscle">${ex.muscle}</div>
+        <div class="ex-machine">📍 ${ex.machine}</div>
+      </div>
+      <div style="padding-right:12px;color:var(--muted)">›</div>
+    </div>`).join('');
+}
+function openExDetail(name){
+  const ex=exerciseLib.find(e=>e.name===name);if(!ex)return;
+  document.getElementById('ex-detail-name').textContent=ex.name;
+  document.getElementById('ex-detail-machine').textContent='📍 '+ex.machine;
+  document.getElementById('ex-detail-muscle').textContent='💪 '+ex.muscle;
+  document.getElementById('ex-detail-exec').textContent=ex.exec;
+  document.getElementById('ex-detail-anim').innerHTML=vectorSvg(ex.svgType,ex.color);
+  document.getElementById('ex-detail-errors').innerHTML=ex.err.map(e=>`<li style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--muted);background:var(--bg3);border-radius:8px;padding:10px"><span style="color:var(--red)">⚠</span>${e}</li>`).join('');
+  openOv('overlay-ex');
+}
+
+// ── ABA: CALENDÁRIO ───────────────────────────────────────
+let calCurrentDate=new Date();
+let selectedCalDay=null;
+const CAL_COLORS_MAP={A:'#3b82f6',B:'#7c3aed',C:'#f97316',D:'#10b981'};
+const MUSCLE_GROUPS=['Peito','Tríceps','Costas','Bíceps','Pernas','Ombro','Cardio'];
+
+function changeMonth(dir){
+  calCurrentDate.setMonth(calCurrentDate.getMonth()+dir);
+  renderCalendario();
+}
+
+function renderCalendario(){
+  const year=calCurrentDate.getFullYear(),month=calCurrentDate.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const days=new Date(year,month+1,0).getDate();
+  const months=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('cal-lbl').textContent=`${months[month]} ${year}`;
+
+  const grid=document.getElementById('cal-grid');grid.innerHTML='';
+  ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].forEach(d=>{
+    const h=document.createElement('div');h.className='cal-hdr';h.textContent=d;grid.appendChild(h);
+  });
+  for(let i=0;i<firstDay;i++){const e=document.createElement('div');e.className='cal-day empty';grid.appendChild(e);}
+
+  const today=new Date();let doneCount=0,pendingCount=0;
+  for(let i=1;i<=days;i++){
+    const dStr=`${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const sched=appState.calendarSchedule[dStr]||[];
+    const isRest=appState.calendarRest.includes(dStr);
+    const isToday=year===today.getFullYear()&&month===today.getMonth()&&i===today.getDate();
+    const isDone=appState.completedWorkouts.some(w=>w.date===dStr);
+    const isPast=new Date(dStr+'T12:00:00')<=today;
+    const day=document.createElement('div');
+    day.className='cal-day'+(isToday?' today':'');
+    day.onclick=()=>openCalDay(dStr);
+
+    let bg='var(--card2)';
+    if(sched.length>0){
+      const musToRoute={Peito:'A',Tríceps:'A',Costas:'B',Bíceps:'B',Pernas:'C',Ombro:'D',Cardio:'D'};
+      const routeKey=musToRoute[sched[0]]||'A';
+      bg=isDone?CAL_COLORS_MAP[routeKey]:'rgba('+hexToRgb(CAL_COLORS_MAP[routeKey])+',0.2)';
+    }
+    if(isRest)bg='var(--muted2)';
+    day.style.background=bg;
+    day.innerHTML=`<div class="cal-num" style="color:${isToday?'var(--accent)':'var(--text)'}">${i}</div>`
+      +(sched.length>0?`<div class="cal-dot" style="background:${CAL_COLORS_MAP[{Peito:'A',Tríceps:'A',Costas:'B',Bíceps:'B',Pernas:'C',Ombro:'D',Cardio:'D'}[sched[0]]||'A']}"></div>`:'')
+      +(isRest?`<div style="font-size:8px;color:var(--text)">ZZZ</div>`:'');
+
+    if(sched.length>0&&isPast&&!isDone)pendingCount++;
+    if(isDone)doneCount++;
+    grid.appendChild(day);
+  }
+  document.getElementById('cal-done').innerHTML=`${doneCount}<span class="stat-unit">treinos</span>`;
+  document.getElementById('cal-pending').innerHTML=`${pendingCount}<span class="stat-unit">treinos</span>`;
+}
+
+function hexToRgb(hex){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+function openCalDay(dStr){
+  selectedCalDay=dStr;
+  const parts=dStr.split('-');
+  document.getElementById('cal-day-title').textContent=`${parseInt(parts[2])}/${parseInt(parts[1])}/${parts[0]}`;
+  const sched=appState.calendarSchedule[dStr]||[];
+  const isRest=appState.calendarRest.includes(dStr);
+  const musToCol={Peito:'var(--accent2)',Tríceps:'var(--red)',Costas:'var(--blue)',Bíceps:'var(--accent3)',Pernas:'var(--purple)',Ombro:'var(--accent)',Cardio:'rgba(255,255,255,0.3)'};
+  const opts=document.getElementById('cal-day-options');
+  opts.innerHTML=[...MUSCLE_GROUPS,'Descanso'].map(m=>{
+    const isActive=m==='Descanso'?isRest:sched.includes(m);
+    return `<button class="cal-opt-btn${isActive?' active':''}" style="${isActive&&m!=='Descanso'?`border-color:${musToCol[m]||'var(--accent)'};color:var(--text)`:''}" onclick="toggleCalOption('${m}')">${m==='Descanso'?'😴 Descanso':m}</button>`;
+  }).join('');
+  openOv('overlay-cal-day');
+}
+
+function toggleCalOption(type){
+  if(!selectedCalDay)return;
+  if(type==='Descanso'){
+    if(appState.calendarRest.includes(selectedCalDay)){
+      appState.calendarRest=appState.calendarRest.filter(d=>d!==selectedCalDay);
+    }else{
+      appState.calendarRest.push(selectedCalDay);
+      delete appState.calendarSchedule[selectedCalDay];
+    }
+  }else{
+    appState.calendarRest=appState.calendarRest.filter(d=>d!==selectedCalDay);
+    let arr=appState.calendarSchedule[selectedCalDay]||[];
+    if(arr.includes(type))arr=arr.filter(x=>x!==type);
+    else arr.push(type);
+    if(arr.length)appState.calendarSchedule[selectedCalDay]=arr;
+    else delete appState.calendarSchedule[selectedCalDay];
+  }
+  saveState();openCalDay(selectedCalDay);renderCalendario();
+}
+
+function clearCalDay(){
+  if(!selectedCalDay)return;
+  delete appState.calendarSchedule[selectedCalDay];
+  appState.calendarRest=appState.calendarRest.filter(d=>d!==selectedCalDay);
+  saveState();closeOv('overlay-cal-day');renderCalendario();toast('Dia limpo');
+}
+
+// ── ABA: NUTRIÇÃO ─────────────────────────────────────────
+function renderNutricao(){
+  const today=todayStr();
+  document.getElementById('nutri-date-lbl').textContent=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'short'});
+  const todayMeals=appState.meals.filter(m=>m.date===today);
+  const tot=todayMeals.reduce((a,m)=>({kcal:a.kcal+(m.kcal||0),prot:a.prot+(m.prot||0),carb:a.carb+(m.carb||0),fat:a.fat+(m.fat||0)}),{kcal:0,prot:0,carb:0,fat:0});
+  document.getElementById('nutri-kcal').textContent=Math.round(tot.kcal)+' kcal';
+  document.getElementById('nutri-prot').textContent=Math.round(tot.prot);
+  document.getElementById('nutri-carb').textContent=Math.round(tot.carb);
+  document.getElementById('nutri-fat').textContent=Math.round(tot.fat);
+  document.getElementById('pp').style.width=Math.min(100,Math.round((tot.prot/150)*100))+'%';
+  document.getElementById('pc').style.width=Math.min(100,Math.round((tot.carb/300)*100))+'%';
+  document.getElementById('pf').style.width=Math.min(100,Math.round((tot.fat/70)*100))+'%';
+  renderWater();
+  // Refeições
+  const list=document.getElementById('meal-list');
+  if(!todayMeals.length){
+    list.innerHTML=`<div class="empty"><div class="empty-icon">🥦</div><div class="empty-text">Nenhuma refeição registrada hoje.</div></div>`;return;
+  }
+  list.innerHTML=[...todayMeals].reverse().map(m=>`
+    <div class="meal-item">
+      <div style="flex:1;min-width:0">
+        <div class="meal-name">${m.name}</div>
+        <div class="meal-time">${m.time?m.time+' · ':''}${m.kcal||0} kcal</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <div><div class="macro-val" style="color:var(--blue)">${m.prot||0}</div><div class="macro-lbl">P</div></div>
+        <div><div class="macro-val" style="color:var(--accent)">${m.carb||0}</div><div class="macro-lbl">C</div></div>
+        <div><div class="macro-val" style="color:var(--accent2)">${m.fat||0}</div><div class="macro-lbl">G</div></div>
+      </div>
+      <button class="icon-del" onclick="delMeal('${m.id}')">🗑</button>
+    </div>`).join('');
+}
+
+// ── GARRAFA DE ÁGUA ───────────────────────────────────────
+function renderWater(){
+  const today=todayStr();
+  if(appState.waterDate!==today){appState.waterMl=0;appState.waterLog=[];appState.waterDate=today;}
+  const ml=appState.waterMl||0;const max=2000;
+  const pct=Math.min(100,(ml/max)*100);
+  const fillH=Math.round(168*(pct/100));
+  const fillY=208-fillH;
+  const fill=document.getElementById('waterFill');
+  const wave=document.getElementById('waterWave');
+  if(fill){fill.setAttribute('y',fillY);fill.setAttribute('height',fillH);}
+  if(wave){wave.setAttribute('d',`M16 ${fillY} Q33 ${fillY-4} 50 ${fillY} Q67 ${fillY+4} 86 ${fillY} L86 220 L16 220 Z`);}
+  document.getElementById('bottle-ml').textContent=ml;
+  document.getElementById('water-total').textContent=ml;
+  document.getElementById('water-ml-badge').textContent=ml+' ml';
+}
+function addWaterMl(ml){
+  const today=todayStr();
+  if(appState.waterDate!==today){appState.waterMl=0;appState.waterLog=[];appState.waterDate=today;}
+  appState.waterMl=(appState.waterMl||0)+ml;
+  if(!appState.waterHistory)appState.waterHistory={};
+  appState.waterHistory[today]=(appState.waterHistory[today]||0)+ml;
+  saveState();renderWater();
+  if(appState.waterMl>=2000)toast('Meta de hidratação atingida! 💧');
+}
+function addCustomWater(){
+  const v=parseInt(document.getElementById('custom-water').value);
+  if(!v||v<1){toast('Informe um valor válido','err');return;}
+  document.getElementById('custom-water').value='';
+  addWaterMl(v);
+}
+function resetWater(){
+  if(!confirm('Zerar o registro de água de hoje?'))return;
+  appState.waterMl=0;appState.waterLog=[];appState.waterDate=todayStr();
+  saveState();renderWater();toast('Registro zerado');
+}
+
+// ── REFEIÇÕES ─────────────────────────────────────────────
+let cachedFood=null;
+function initFoodDatalist(){
+  const dl=document.getElementById('food-datalist');
+  const set=new Set();
+  foodDb.forEach(f=>f.keys.forEach(k=>set.add(k.charAt(0).toUpperCase()+k.slice(1))));
+  dl.innerHTML=Array.from(set).sort().map(k=>`<option value="${k}">`).join('');
+}
+
+function onFoodSearch(){calcFoodMacros();}
+function calcFoodMacros(){
+  const search=norm(document.getElementById('food-search').value.trim());
+  const qty=parseFloat(document.getElementById('food-qty').value)||0;
+  const unit=document.getElementById('food-unit').value;
+  if(!search||!qty){document.getElementById('food-preview').style.display='none';cachedFood=null;return;}
+  const food=foodDb.find(f=>f.keys.some(k=>norm(k)===search||norm(k).includes(search)||search.includes(norm(k))));
+  if(!food){document.getElementById('food-preview').style.display='none';cachedFood=null;return;}
+  let dw=100;
+  Object.keys(unitWeights).forEach(k=>{if(search.includes(norm(k)))dw=unitWeights[k];});
+  let mult=qty;
+  const isGram=['g','gramas','ml'].includes(unit);
+  if(food.unit==='un'&&isGram)mult=qty;
+  else if(food.unit==='un'&&!isGram)mult=qty*dw;
+  else if(food.unit==='g'&&!isGram)mult=qty*dw;
+  const kcal=Math.round(food.kcal*mult),prot=Math.round(food.p*mult),carb=Math.round(food.c*mult),fat=Math.round(food.g*mult);
+  document.getElementById('prev-kcal').textContent=kcal;
+  document.getElementById('prev-prot').textContent=prot;
+  document.getElementById('prev-carb').textContent=carb;
+  document.getElementById('prev-fat').textContent=fat;
+  document.getElementById('food-preview').style.display='';
+  document.getElementById('meal-kcal').value=kcal;
+  document.getElementById('meal-prot').value=prot;
+  document.getElementById('meal-carb').value=carb;
+  document.getElementById('meal-fat').value=fat;
+  cachedFood={kcal,prot,carb,fat};
+}
+
+function openAddMeal(){
+  document.getElementById('food-search').value='';
+  document.getElementById('food-qty').value='';
+  document.getElementById('food-unit').value='g';
+  document.getElementById('food-preview').style.display='none';
+  document.getElementById('meal-kcal').value='';
+  document.getElementById('meal-prot').value='';
+  document.getElementById('meal-carb').value='';
+  document.getElementById('meal-fat').value='';
+  document.getElementById('meal-time').value=nowTime();
+  openOv('overlay-meal');
+}
+function saveMeal(){
+  const name=document.getElementById('food-search').value.trim();
+  if(!name){toast('Digite o alimento','err');return;}
+  const id=Date.now().toString(36)+Math.random().toString(36).substr(2);
+  const meal={
+    id,name,date:todayStr(),
+    time:document.getElementById('meal-time').value,
+    kcal:parseFloat(document.getElementById('meal-kcal').value)||0,
+    prot:parseFloat(document.getElementById('meal-prot').value)||0,
+    carb:parseFloat(document.getElementById('meal-carb').value)||0,
+    fat:parseFloat(document.getElementById('meal-fat').value)||0
+  };
+  appState.meals.push(meal);saveState();closeOv('overlay-meal');renderNutricao();
+  toast('Refeição adicionada! 🍽️');
+}
+function delMeal(id){
+  if(!confirm('Remover esta refeição?'))return;
+  appState.meals=appState.meals.filter(m=>m.id!==id);saveState();renderNutricao();toast('Removido');
+}
+
+// ── INIT ──────────────────────────────────────────────────
+// URL Sync check
+try {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlUid = urlParams.get('uid');
+  if (urlUid) {
+    localStorage.setItem('senaFitnessSyncedUid', urlUid);
+    // Clean URL parameter
+    const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+    window.history.replaceState({path: cleanUrl}, '', cleanUrl);
+  }
+} catch (e) {
+  console.error("Error processing URL sync parameters:", e);
+}
+
+loadStateLocal();
+renderTreinos();
+renderExercicios();
+renderCalendario();
+renderNutricao();
+initFoodDatalist();
+
+let isSyncInitialized = false;
+function initializeSync(uid) {
+  if (isSyncInitialized) return;
+  isSyncInitialized = true;
+  
+  fbUserId = uid;
+  updateSyncBadge();
+  setupRemoteListener();
+}
+
+// 1. Immediate load if synced ID exists in localStorage
+try {
+  const savedSyncedUid = localStorage.getItem('senaFitnessSyncedUid');
+  if (savedSyncedUid) {
+    let syncedUid = savedSyncedUid.trim();
+    if (syncedUid.startsWith('custom_')) {
+      const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      initializeSync('custom_' + cleanId);
+    } else if (syncedUid.length < 25) {
+      const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const finalId = 'custom_' + cleanId;
+      try {
+        localStorage.setItem('senaFitnessSyncedUid', finalId);
+      } catch(e) {}
+      initializeSync(finalId);
+    } else {
+      initializeSync(syncedUid);
+    }
+  }
+} catch(e) {}
+
+// 2. Setup auth listeners
+try {
+  if (fbAuth) {
+    fbAuth.signInAnonymously().catch(e => console.error("Auth error:", e));
+    fbAuth.onAuthStateChanged(async user => {
+      try {
+        if (user) {
+          let syncedUid = null;
+          try {
+            syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+          } catch(e) {}
+          
+          if (syncedUid) {
+            syncedUid = syncedUid.trim();
+            if (syncedUid.startsWith('custom_')) {
+              const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+              initializeSync('custom_' + cleanId);
+            } else if (syncedUid.length < 25) {
+              const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+              const finalId = 'custom_' + cleanId;
+              try {
+                localStorage.setItem('senaFitnessSyncedUid', finalId);
+              } catch(e) {}
+              initializeSync(finalId);
+            } else {
+              initializeSync(syncedUid);
+            }
+          } else {
+            initializeSync(user.uid);
+          }
+          
+          const syncedUidAfter = localStorage.getItem('senaFitnessSyncedUid');
+          toast(syncedUidAfter ? "Sincronizado com Computador! 📱☁️" : "Sincronizado na nuvem! ☁️");
+        }
+      } catch(err) {
+        console.error("Error in onAuthStateChanged inner callback:", err);
+      }
+    });
+  }
+} catch(e) {
+  console.error("Error setting up auth observer:", e);
+}
+
+// 3. Fallback timeout for local access (unauthorized domains)
+setTimeout(() => {
+  if (!isSyncInitialized) {
+    console.warn("Firebase Auth timeout, using local fallback");
+    let syncedUid = null;
+    try {
+      syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+    } catch(e) {}
+    
+    if (syncedUid) {
+      syncedUid = syncedUid.trim();
+      if (syncedUid.startsWith('custom_')) {
+        const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        initializeSync('custom_' + cleanId);
+      } else if (syncedUid.length < 25) {
+        const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        initializeSync('custom_' + cleanId);
+      } else {
+        initializeSync(syncedUid);
+      }
+    } else {
+      initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
+    }
+  }
+}, 2000);
+
+// Listeners de rede para atualizar interface de sincronização
+window.addEventListener('online', () => {
+  firestoreError = false;
+  updateSyncBadge();
+});
+window.addEventListener('offline', () => {
+  updateSyncBadge();
+});
+
+
+</script>
+</body>
+</html>
