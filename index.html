@@ -1214,36 +1214,25 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
   </div>
 </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBG87uTSEOpsRPz42E_r_wi6yMI6nHhrLk",
-  authDomain: "projeto-academia-2026.firebaseapp.com",
-  projectId: "projeto-academia-2026",
-  storageBucket: "projeto-academia-2026.firebasestorage.app",
-  messagingSenderId: "782938659543",
-  appId: "1:782938659543:web:0fa38d866e9410323dae92",
-  measurementId: "G-SFZN3NE3ME"
-};
+// Supabase Configuration Placeholders
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
 
 let db = null;
-let auth = null;
-let firebaseLoaded = false;
-let firestoreError = false;
+let firebaseLoaded = false; // Used to track connection status in UI
+let firestoreError = false; // Used to track DB errors
 
-if (typeof firebase !== 'undefined') {
-  try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-    auth = firebase.auth();
+try {
+  if (typeof supabase !== 'undefined' && supabaseUrl && supabaseUrl !== 'YOUR_SUPABASE_URL' && supabaseAnonKey && supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY') {
+    db = supabase.createClient(supabaseUrl, supabaseAnonKey);
     firebaseLoaded = true;
-  } catch(e) {
-    console.error("Firebase initialization failed:", e);
+  } else {
+    console.warn("Supabase client not initialized: placeholders not replaced or SDK not loaded.");
   }
-} else {
-  console.warn("Firebase SDK not loaded (offline or blocked).");
+} catch (e) {
+  console.error("Supabase initialization failed:", e);
 }
 
 let firebaseUserId = null;
@@ -1363,8 +1352,22 @@ function saveStateLocal(){
 function saveState(){
   saveStateLocal();
   if(firebaseUserId && db){
-    db.collection("users").doc(firebaseUserId).set(appState)
-      .catch(e => console.error("Firebase save error", e));
+    db.from('users').upsert({ id: firebaseUserId, state: appState, updated_at: new Date().toISOString() })
+      .then(({ error }) => {
+        if (error) {
+          console.error("Supabase save error:", error);
+          firestoreError = true;
+          updateSyncUI();
+        } else {
+          firestoreError = false;
+          updateSyncUI();
+        }
+      })
+      .catch(e => {
+        console.error("Supabase save error:", e);
+        firestoreError = true;
+        updateSyncUI();
+      });
   }
 }
 
@@ -1484,9 +1487,19 @@ function saveCustomSyncId() {
     try {
       localStorage.removeItem('senaFitnessCustomUid');
     } catch(e) {}
-    if (auth.currentUser) {
-      firebaseUserId = auth.currentUser.uid;
+    
+    // Fallback to persistent anonymous ID
+    let anonId = null;
+    try {
+      anonId = localStorage.getItem('senaFitnessAnonUid');
+    } catch(e) {}
+    if (!anonId) {
+      anonId = 'anon_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      try {
+        localStorage.setItem('senaFitnessAnonUid', anonId);
+      } catch(e) {}
     }
+    firebaseUserId = anonId;
     showToast("ID personalizado removido. Usando ID padrão.");
   } else {
     const cleanId = rawId.toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -1523,59 +1536,116 @@ function saveCustomSyncId() {
 
 function updateDesktopPresence() {
   if (!firebaseUserId || !db) return;
-  const docRef = db.collection("users").doc(firebaseUserId);
-  docRef.update({
-    lastActiveDesktop: Date.now()
-  }).catch(() => {
-    // Fallback if doc doesn't exist yet
-    saveState();
+  appState.lastActiveDesktop = Date.now();
+  db.from('users').update({ 
+    state: appState,
+    updated_at: new Date().toISOString()
+  }).eq('id', firebaseUserId).then(({ error }) => {
+    if (error) {
+      // Fallback if doc doesn't exist yet
+      saveState();
+    }
   });
 }
 // Run presence check
 setInterval(updateDesktopPresence, 30000);
 
+let remoteChannel = null;
 function setupRemoteListener() {
   if (!firebaseUserId || !db) return;
-  if (remoteListenerUnsubscribe) {
-    remoteListenerUnsubscribe();
+  if (remoteChannel) {
+    db.removeChannel(remoteChannel);
   }
   
-  const docRef = db.collection("users").doc(firebaseUserId);
-  
-  remoteListenerUnsubscribe = docRef.onSnapshot((docSnap) => {
-    firestoreError = false;
-    if (docSnap.exists) {
-      const data = docSnap.data();
-      lastRemoteState = data;
-      updateSyncUI();
-      
-      if (isFirstLoad || !areStatesEqual(data, appState)) {
-        isFirstLoad = false;
-        Object.assign(appState, data);
-        saveStateLocal();
-        renderAllState();
-      } else {
-        appState.lastActiveDesktop = data.lastActiveDesktop;
-        appState.lastActiveMobile = data.lastActiveMobile;
-      }
-    } else {
-      isFirstLoad = false;
-      docRef.set(appState).catch(e => {
-        console.error("Firebase init doc error", e);
-        firestoreError = true;
+  // 1. Initial fetch from database
+  db.from('users').select('state').eq('id', firebaseUserId).maybeSingle()
+    .then(({ data, error }) => {
+      firestoreError = !!error;
+      if (error) {
+        console.error("Supabase select error:", error);
         updateSyncUI();
-      });
-    }
-  }, (error) => {
-    console.error("Firebase onSnapshot error:", error);
-    firestoreError = true;
-    updateSyncUI();
-  });
+        return;
+      }
+      
+      if (data && data.state) {
+        const remoteState = data.state;
+        lastRemoteState = remoteState;
+        updateSyncUI();
+        
+        if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
+          isFirstLoad = false;
+          Object.assign(appState, remoteState);
+          saveStateLocal();
+          renderAllState();
+        } else {
+          appState.lastActiveDesktop = remoteState.lastActiveDesktop;
+          appState.lastActiveMobile = remoteState.lastActiveMobile;
+        }
+      } else {
+        // Document does not exist yet, initialize it
+        isFirstLoad = false;
+        db.from('users').upsert({ id: firebaseUserId, state: appState, updated_at: new Date().toISOString() })
+          .then(({ error }) => {
+            if (error) {
+              console.error("Supabase init doc error:", error);
+              firestoreError = true;
+              updateSyncUI();
+            }
+          })
+          .catch(e => {
+            console.error("Supabase init doc error:", e);
+            firestoreError = true;
+            updateSyncUI();
+          });
+      }
+      
+      // 2. Realtime updates subscription
+      remoteChannel = db.channel(`users_changes_${firebaseUserId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'users',
+            filter: `id=eq.${firebaseUserId}`
+          },
+          (payload) => {
+            firestoreError = false;
+            const remoteState = payload.new ? payload.new.state : null;
+            if (remoteState) {
+              lastRemoteState = remoteState;
+              updateSyncUI();
+              
+              if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
+                isFirstLoad = false;
+                Object.assign(appState, remoteState);
+                saveStateLocal();
+                renderAllState();
+              } else {
+                appState.lastActiveDesktop = remoteState.lastActiveDesktop;
+                appState.lastActiveMobile = remoteState.lastActiveMobile;
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error("Supabase Realtime subscription error:", status);
+            firestoreError = true;
+            updateSyncUI();
+          }
+        });
+    })
+    .catch(e => {
+      console.error("Supabase select error:", e);
+      firestoreError = true;
+      updateSyncUI();
+    });
 }
 
 function openSyncModal() {
   if (!firebaseUserId) {
-    showToast("Erro: Usuário não autenticado no Firebase.");
+    showToast("Erro: Usuário não autenticado.");
     return;
   }
   
@@ -3129,52 +3199,56 @@ try {
   }
 } catch(e) {}
 
-// 2. Setup auth listeners
-if (auth) {
-  auth.signInAnonymously().catch(err => {
-      console.error("Auth error:", err);
-      firestoreError = true;
-      updateSyncUI();
-  });
-
-  auth.onAuthStateChanged(async (user) => {
-      if(user) {
-          let customId = null;
-          try {
-              customId = localStorage.getItem('senaFitnessCustomUid');
-          } catch(e) {}
-          
-          if (customId) {
-              initializeSync('custom_' + customId.trim());
-          } else {
-              initializeSync(user.uid);
-          }
-          showToast("Sincronizado na nuvem! ☁️");
-      }
-  });
-}
-
-// 3. Fallback timeout for local access (unauthorized domains)
-setTimeout(() => {
-  if (!isSyncInitialized) {
-    console.warn("Firebase Auth timeout, using local fallback");
-    firestoreError = true;
-    let customId = null;
+// 2. Set up sync initialization
+if (db) {
+  let customId = null;
+  try {
+    customId = localStorage.getItem('senaFitnessCustomUid');
+  } catch(e) {}
+  
+  if (customId) {
+    initializeSync('custom_' + customId.trim());
+  } else {
+    // Generate or retrieve persistent local anonymous ID
+    let anonId = null;
     try {
-      customId = localStorage.getItem('senaFitnessCustomUid');
-    } catch(e) {}
-    
-    if (customId) {
-      initializeSync('custom_' + customId.trim());
-    } else {
-      initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
+      anonId = localStorage.getItem('senaFitnessAnonUid');
+      if (!anonId) {
+        anonId = 'anon_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('senaFitnessAnonUid', anonId);
+      }
+    } catch(e) {
+      anonId = 'temp_local_' + Math.random().toString(36).substring(2, 10);
     }
+    initializeSync(anonId);
   }
-}, 2000);
+  showToast("Sincronizado na nuvem! ☁️");
+} else {
+  // If db is not loaded, run fallback timeout (e.g. offline status)
+  setTimeout(() => {
+    if (!isSyncInitialized) {
+      console.warn("Supabase client not loaded, using local fallback");
+      firestoreError = true;
+      let customId = null;
+      try {
+        customId = localStorage.getItem('senaFitnessCustomUid');
+      } catch(e) {}
+      
+      if (customId) {
+        initializeSync('custom_' + customId.trim());
+      } else {
+        initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
+      }
+    }
+  }, 1000);
+}
 
 // Listeners de rede para atualizar interface de sincronização
 window.addEventListener('online', () => {
   firestoreError = false;
+  if (db && isSyncInitialized) {
+    setupRemoteListener();
+  }
   updateSyncUI();
 });
 window.addEventListener('offline', () => {

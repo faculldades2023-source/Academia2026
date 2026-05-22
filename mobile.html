@@ -8,9 +8,7 @@
 <title>SENA Fitness — Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.1/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -611,32 +609,23 @@ select.form-input{appearance:none}
 <div class="toast" id="toast"></div>
 
 <script>
-// ── FIREBASE ──────────────────────────────────────────────
-const firebaseConfig={
-  apiKey:"AIzaSyBG87uTSEOpsRPz42E_r_wi6yMI6nHhrLk",
-  authDomain:"projeto-academia-2026.firebaseapp.com",
-  projectId:"projeto-academia-2026",
-  storageBucket:"projeto-academia-2026.firebasestorage.app",
-  messagingSenderId:"782938659543",
-  appId:"1:782938659543:web:0fa38d866e9410323dae92"
-};
+// ── SUPABASE ──────────────────────────────────────────────
+const supabaseUrl = 'YOUR_SUPABASE_URL';
+const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
 
-let fbDb=null;
-let fbAuth=null;
-let firebaseLoaded=false;
-let firestoreError=false;
+let fbDb=null; // Keeps fbDb name to maintain compatibility with existing variables
+let firebaseLoaded=false; // Used to track connection status in UI
+let firestoreError=false; // Used to track DB errors
 
-if (typeof firebase !== 'undefined') {
-  try {
-    firebase.initializeApp(firebaseConfig);
-    fbDb=firebase.firestore();
-    fbAuth=firebase.auth();
-    firebaseLoaded=true;
-  } catch(e) {
-    console.error("Firebase initialization failed:", e);
+try {
+  if (typeof supabase !== 'undefined' && supabaseUrl && supabaseUrl !== 'YOUR_SUPABASE_URL' && supabaseAnonKey && supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY') {
+    fbDb = supabase.createClient(supabaseUrl, supabaseAnonKey);
+    firebaseLoaded = true;
+  } else {
+    console.warn("Supabase client not initialized: placeholders not replaced or SDK not loaded.");
   }
-} else {
-  console.warn("Firebase SDK not loaded (offline or blocked).");
+} catch (e) {
+  console.error("Supabase initialization failed:", e);
 }
 
 let fbUserId=null;
@@ -687,7 +676,24 @@ function saveStateLocal(){
 }
 function saveState(){
   saveStateLocal();
-  if(fbUserId && fbDb) fbDb.collection("users").doc(fbUserId).set(appState).catch(e=>console.error(e));
+  if(fbUserId && fbDb) {
+    fbDb.from('users').upsert({ id: fbUserId, state: appState, updated_at: new Date().toISOString() })
+      .then(({ error }) => {
+        if (error) {
+          console.error("Supabase save error:", error);
+          firestoreError = true;
+          updateSyncBadge();
+        } else {
+          firestoreError = false;
+          updateSyncBadge();
+        }
+      })
+      .catch(e => {
+        console.error("Supabase save error:", e);
+        firestoreError = true;
+        updateSyncBadge();
+      });
+  }
 }
 let remoteListenerUnsubscribe = null;
 let isFirstLoad = true;
@@ -862,49 +868,110 @@ function unlinkMobileDevice() {
 
 function updateMobilePresence() {
   if (!fbUserId || !fbDb) return;
-  const ref = fbDb.collection("users").doc(fbUserId);
-  ref.update({
-    lastActiveMobile: Date.now()
-  }).catch(() => {
-    saveState();
+  appState.lastActiveMobile = Date.now();
+  fbDb.from('users').update({ 
+    state: appState,
+    updated_at: new Date().toISOString()
+  }).eq('id', fbUserId).then(({ error }) => {
+    if (error) {
+      saveState();
+    }
   });
 }
 // Run presence check
 setInterval(updateMobilePresence, 30000);
 
+let remoteChannel = null;
 function setupRemoteListener() {
   if (!fbUserId || !fbDb) return;
-  if (remoteListenerUnsubscribe) {
-    remoteListenerUnsubscribe();
+  if (remoteChannel) {
+    fbDb.removeChannel(remoteChannel);
   }
   
-  const ref = fbDb.collection("users").doc(fbUserId);
-  
-  remoteListenerUnsubscribe = ref.onSnapshot((docSnap) => {
-    firestoreError = false;
-    if (docSnap.exists) {
-      const data = docSnap.data();
-      lastRemoteState = data;
-      updateSyncBadge();
-      
-      if (isFirstLoad || !areStatesEqual(data, appState)) {
-        isFirstLoad = false;
-        Object.assign(appState, data);
-        saveStateLocal();
-        renderAllState();
-      } else {
-        appState.lastActiveDesktop = data.lastActiveDesktop;
-        appState.lastActiveMobile = data.lastActiveMobile;
+  // 1. Initial fetch from database
+  fbDb.from('users').select('state').eq('id', fbUserId).maybeSingle()
+    .then(({ data, error }) => {
+      firestoreError = !!error;
+      if (error) {
+        console.error("Supabase select error:", error);
+        updateSyncBadge();
+        return;
       }
-    } else {
-      isFirstLoad = false;
-      ref.set(appState).catch(e => console.error("FB init doc error", e));
-    }
-  }, (error) => {
-    console.error("Firebase onSnapshot error:", error);
-    firestoreError = true;
-    updateSyncBadge();
-  });
+      
+      if (data && data.state) {
+        const remoteState = data.state;
+        lastRemoteState = remoteState;
+        updateSyncBadge();
+        
+        if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
+          isFirstLoad = false;
+          Object.assign(appState, remoteState);
+          saveStateLocal();
+          renderAllState();
+        } else {
+          appState.lastActiveDesktop = remoteState.lastActiveDesktop;
+          appState.lastActiveMobile = remoteState.lastActiveMobile;
+        }
+      } else {
+        // Document does not exist yet, initialize it
+        isFirstLoad = false;
+        fbDb.from('users').upsert({ id: fbUserId, state: appState, updated_at: new Date().toISOString() })
+          .then(({ error }) => {
+            if (error) {
+              console.error("Supabase init doc error:", error);
+              firestoreError = true;
+              updateSyncBadge();
+            }
+          })
+          .catch(e => {
+            console.error("Supabase init doc error:", e);
+            firestoreError = true;
+            updateSyncBadge();
+          });
+      }
+      
+      // 2. Realtime updates subscription
+      remoteChannel = fbDb.channel(`users_changes_${fbUserId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'users',
+            filter: `id=eq.${fbUserId}`
+          },
+          (payload) => {
+            firestoreError = false;
+            const remoteState = payload.new ? payload.new.state : null;
+            if (remoteState) {
+              lastRemoteState = remoteState;
+              updateSyncBadge();
+              
+              if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
+                isFirstLoad = false;
+                Object.assign(appState, remoteState);
+                saveStateLocal();
+                renderAllState();
+              } else {
+                appState.lastActiveDesktop = remoteState.lastActiveDesktop;
+                appState.lastActiveMobile = remoteState.lastActiveMobile;
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error("Supabase Realtime subscription error:", status);
+            firestoreError = true;
+            updateSyncBadge();
+          }
+        });
+    })
+    .catch(e => {
+      console.error("Supabase select error:", e);
+      firestoreError = true;
+      updateSyncBadge();
+    });
 }
 
 // ── ROTINAS ───────────────────────────────────────────────
@@ -1526,78 +1593,75 @@ try {
   }
 } catch(e) {}
 
-// 2. Setup auth listeners
-try {
-  if (fbAuth) {
-    fbAuth.signInAnonymously().catch(e => console.error("Auth error:", e));
-    fbAuth.onAuthStateChanged(async user => {
+// 2. Set up sync initialization
+if (fbDb) {
+  let syncedUid = null;
+  try {
+    syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+  } catch(e) {}
+  
+  if (syncedUid) {
+    syncedUid = syncedUid.trim();
+    if (syncedUid.startsWith('custom_')) {
+      const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      initializeSync('custom_' + cleanId);
+    } else if (syncedUid.length < 25) {
+      const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const finalId = 'custom_' + cleanId;
       try {
-        if (user) {
-          let syncedUid = null;
-          try {
-            syncedUid = localStorage.getItem('senaFitnessSyncedUid');
-          } catch(e) {}
-          
-          if (syncedUid) {
-            syncedUid = syncedUid.trim();
-            if (syncedUid.startsWith('custom_')) {
-              const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
-              initializeSync('custom_' + cleanId);
-            } else if (syncedUid.length < 25) {
-              const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-              const finalId = 'custom_' + cleanId;
-              try {
-                localStorage.setItem('senaFitnessSyncedUid', finalId);
-              } catch(e) {}
-              initializeSync(finalId);
-            } else {
-              initializeSync(syncedUid);
-            }
-          } else {
-            initializeSync(user.uid);
-          }
-          
-          const syncedUidAfter = localStorage.getItem('senaFitnessSyncedUid');
-          toast(syncedUidAfter ? "Sincronizado com Computador! 📱☁️" : "Sincronizado na nuvem! ☁️");
-        }
-      } catch(err) {
-        console.error("Error in onAuthStateChanged inner callback:", err);
-      }
-    });
-  }
-} catch(e) {
-  console.error("Error setting up auth observer:", e);
-}
-
-// 3. Fallback timeout for local access (unauthorized domains)
-setTimeout(() => {
-  if (!isSyncInitialized) {
-    console.warn("Firebase Auth timeout, using local fallback");
-    let syncedUid = null;
-    try {
-      syncedUid = localStorage.getItem('senaFitnessSyncedUid');
-    } catch(e) {}
-    
-    if (syncedUid) {
-      syncedUid = syncedUid.trim();
-      if (syncedUid.startsWith('custom_')) {
-        const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        initializeSync('custom_' + cleanId);
-      } else if (syncedUid.length < 25) {
-        const cleanId = syncedUid.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        initializeSync('custom_' + cleanId);
-      } else {
-        initializeSync(syncedUid);
-      }
+        localStorage.setItem('senaFitnessSyncedUid', finalId);
+      } catch(e) {}
+      initializeSync(finalId);
     } else {
-      initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
+      initializeSync(syncedUid);
     }
+    toast("Sincronizado na nuvem! ☁️");
+  } else {
+    // If not synced, we can initialize with a persistent anonymous ID for local background saving
+    let anonId = null;
+    try {
+      anonId = localStorage.getItem('senaFitnessAnonUid');
+      if (!anonId) {
+        anonId = 'anon_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('senaFitnessAnonUid', anonId);
+      }
+    } catch(e) {
+      anonId = 'temp_local_' + Math.random().toString(36).substring(2, 10);
+    }
+    initializeSync(anonId);
   }
-}, 2000);
+} else {
+  // If db is not loaded, run fallback timeout
+  setTimeout(() => {
+    if (!isSyncInitialized) {
+      console.warn("Supabase client not loaded, using local fallback");
+      firestoreError = true;
+      let syncedUid = null;
+      try {
+        syncedUid = localStorage.getItem('senaFitnessSyncedUid');
+      } catch(e) {}
+      
+      if (syncedUid) {
+        syncedUid = syncedUid.trim();
+        if (syncedUid.startsWith('custom_')) {
+          const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+          initializeSync('custom_' + cleanId);
+        } else {
+          initializeSync(syncedUid);
+        }
+      } else {
+        initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
+      }
+    }
+  }, 1000);
+}
 
 // Listeners de rede para atualizar interface de sincronização
 window.addEventListener('online', () => {
   firestoreError = false;
+  if (fbDb && isSyncInitialized) {
+    setupRemoteListener();
+  }
   updateSyncBadge();
 });
 window.addEventListener('offline', () => {
