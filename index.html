@@ -1214,28 +1214,11 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// Supabase Configuration Placeholders
-const supabaseUrl = 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+let firebaseLoaded = true; // DB is accessible via Vercel Serverless API
+let firestoreError = false; // Used to track DB connection errors
 
-let db = null;
-let firebaseLoaded = false; // Used to track connection status in UI
-let firestoreError = false; // Used to track DB errors
-
-try {
-  if (typeof supabase !== 'undefined' && supabaseUrl && supabaseUrl !== 'YOUR_SUPABASE_URL' && supabaseAnonKey && supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY') {
-    db = supabase.createClient(supabaseUrl, supabaseAnonKey);
-    firebaseLoaded = true;
-  } else {
-    console.warn("Supabase client not initialized: placeholders not replaced or SDK not loaded.");
-  }
-} catch (e) {
-  console.error("Supabase initialization failed:", e);
-}
-
-let firebaseUserId = null;
+let firebaseUserId = null; // Keeps name to maintain compatibility with existing variables
 // NAV
 function goTo(id,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1351,23 +1334,27 @@ function saveStateLocal(){
 
 function saveState(){
   saveStateLocal();
-  if(firebaseUserId && db){
-    db.from('users').upsert({ id: firebaseUserId, state: appState, updated_at: new Date().toISOString() })
-      .then(({ error }) => {
-        if (error) {
-          console.error("Supabase save error:", error);
-          firestoreError = true;
-          updateSyncUI();
-        } else {
-          firestoreError = false;
-          updateSyncUI();
-        }
-      })
-      .catch(e => {
-        console.error("Supabase save error:", e);
-        firestoreError = true;
-        updateSyncUI();
-      });
+  if(firebaseUserId && firebaseLoaded){
+    fetch(`/api/sync?uid=${firebaseUserId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ state: appState })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      firestoreError = false;
+      updateSyncUI();
+    })
+    .catch(e => {
+      console.error("Vercel KV save error:", e);
+      firestoreError = true;
+      updateSyncUI();
+    });
   }
 }
 
@@ -1535,38 +1522,43 @@ function saveCustomSyncId() {
 }
 
 function updateDesktopPresence() {
-  if (!firebaseUserId || !db) return;
+  if (!firebaseUserId || !firebaseLoaded) return;
   appState.lastActiveDesktop = Date.now();
-  db.from('users').update({ 
-    state: appState,
-    updated_at: new Date().toISOString()
-  }).eq('id', firebaseUserId).then(({ error }) => {
-    if (error) {
-      // Fallback if doc doesn't exist yet
-      saveState();
-    }
-  });
+  saveState();
 }
 // Run presence check
 setInterval(updateDesktopPresence, 30000);
 
-let remoteChannel = null;
+let pollInterval = null;
 function setupRemoteListener() {
-  if (!firebaseUserId || !db) return;
-  if (remoteChannel) {
-    db.removeChannel(remoteChannel);
+  if (!firebaseUserId || !firebaseLoaded) return;
+  if (pollInterval) {
+    clearInterval(pollInterval);
   }
   
-  // 1. Initial fetch from database
-  db.from('users').select('state').eq('id', firebaseUserId).maybeSingle()
-    .then(({ data, error }) => {
-      firestoreError = !!error;
-      if (error) {
-        console.error("Supabase select error:", error);
-        updateSyncUI();
-        return;
-      }
-      
+  // 1. Initial fetch
+  fetchRemoteState();
+  
+  // 2. Poll every 3 seconds
+  pollInterval = setInterval(fetchRemoteState, 3000);
+}
+
+function fetchRemoteState() {
+  if (!firebaseUserId || !firebaseLoaded || !navigator.onLine) {
+    if (!navigator.onLine) {
+      firestoreError = true;
+      updateSyncUI();
+    }
+    return;
+  }
+  
+  fetch(`/api/sync?uid=${firebaseUserId}`)
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      firestoreError = false;
       if (data && data.state) {
         const remoteState = data.state;
         lastRemoteState = remoteState;
@@ -1582,62 +1574,19 @@ function setupRemoteListener() {
           appState.lastActiveMobile = remoteState.lastActiveMobile;
         }
       } else {
-        // Document does not exist yet, initialize it
+        // Document does not exist yet on remote, initialize it
         isFirstLoad = false;
-        db.from('users').upsert({ id: firebaseUserId, state: appState, updated_at: new Date().toISOString() })
-          .then(({ error }) => {
-            if (error) {
-              console.error("Supabase init doc error:", error);
-              firestoreError = true;
-              updateSyncUI();
-            }
-          })
-          .catch(e => {
-            console.error("Supabase init doc error:", e);
-            firestoreError = true;
-            updateSyncUI();
-          });
-      }
-      
-      // 2. Realtime updates subscription
-      remoteChannel = db.channel(`users_changes_${firebaseUserId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'users',
-            filter: `id=eq.${firebaseUserId}`
+        fetch(`/api/sync?uid=${firebaseUserId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
           },
-          (payload) => {
-            firestoreError = false;
-            const remoteState = payload.new ? payload.new.state : null;
-            if (remoteState) {
-              lastRemoteState = remoteState;
-              updateSyncUI();
-              
-              if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
-                isFirstLoad = false;
-                Object.assign(appState, remoteState);
-                saveStateLocal();
-                renderAllState();
-              } else {
-                appState.lastActiveDesktop = remoteState.lastActiveDesktop;
-                appState.lastActiveMobile = remoteState.lastActiveMobile;
-              }
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error("Supabase Realtime subscription error:", status);
-            firestoreError = true;
-            updateSyncUI();
-          }
-        });
+          body: JSON.stringify({ state: appState })
+        }).catch(err => console.error("API init error:", err));
+      }
     })
     .catch(e => {
-      console.error("Supabase select error:", e);
+      console.error("Vercel KV fetch error:", e);
       firestoreError = true;
       updateSyncUI();
     });
@@ -3200,7 +3149,7 @@ try {
 } catch(e) {}
 
 // 2. Set up sync initialization
-if (db) {
+if (firebaseLoaded) {
   let customId = null;
   try {
     customId = localStorage.getItem('senaFitnessCustomUid');
@@ -3223,30 +3172,12 @@ if (db) {
     initializeSync(anonId);
   }
   showToast("Sincronizado na nuvem! ☁️");
-} else {
-  // If db is not loaded, run fallback timeout (e.g. offline status)
-  setTimeout(() => {
-    if (!isSyncInitialized) {
-      console.warn("Supabase client not loaded, using local fallback");
-      firestoreError = true;
-      let customId = null;
-      try {
-        customId = localStorage.getItem('senaFitnessCustomUid');
-      } catch(e) {}
-      
-      if (customId) {
-        initializeSync('custom_' + customId.trim());
-      } else {
-        initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
-      }
-    }
-  }, 1000);
 }
 
 // Listeners de rede para atualizar interface de sincronização
 window.addEventListener('online', () => {
   firestoreError = false;
-  if (db && isSyncInitialized) {
+  if (firebaseLoaded && isSyncInitialized) {
     setupRemoteListener();
   }
   updateSyncUI();

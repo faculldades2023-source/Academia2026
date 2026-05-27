@@ -8,7 +8,7 @@
 <title>SENA Fitness — Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- No external database script required for Vercel KV REST API -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 :root{
@@ -609,24 +609,9 @@ select.form-input{appearance:none}
 <div class="toast" id="toast"></div>
 
 <script>
-// ── SUPABASE ──────────────────────────────────────────────
-const supabaseUrl = 'YOUR_SUPABASE_URL';
-const supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
-
-let fbDb=null; // Keeps fbDb name to maintain compatibility with existing variables
-let firebaseLoaded=false; // Used to track connection status in UI
+// ── VERCEL KV ──────────────────────────────────────────────
+let firebaseLoaded=true; // DB is accessible via Vercel Serverless API
 let firestoreError=false; // Used to track DB errors
-
-try {
-  if (typeof supabase !== 'undefined' && supabaseUrl && supabaseUrl !== 'YOUR_SUPABASE_URL' && supabaseAnonKey && supabaseAnonKey !== 'YOUR_SUPABASE_ANON_KEY') {
-    fbDb = supabase.createClient(supabaseUrl, supabaseAnonKey);
-    firebaseLoaded = true;
-  } else {
-    console.warn("Supabase client not initialized: placeholders not replaced or SDK not loaded.");
-  }
-} catch (e) {
-  console.error("Supabase initialization failed:", e);
-}
 
 let fbUserId=null;
 
@@ -676,23 +661,27 @@ function saveStateLocal(){
 }
 function saveState(){
   saveStateLocal();
-  if(fbUserId && fbDb) {
-    fbDb.from('users').upsert({ id: fbUserId, state: appState, updated_at: new Date().toISOString() })
-      .then(({ error }) => {
-        if (error) {
-          console.error("Supabase save error:", error);
-          firestoreError = true;
-          updateSyncBadge();
-        } else {
-          firestoreError = false;
-          updateSyncBadge();
-        }
-      })
-      .catch(e => {
-        console.error("Supabase save error:", e);
-        firestoreError = true;
-        updateSyncBadge();
-      });
+  if(fbUserId && firebaseLoaded) {
+    fetch(`/api/sync?uid=${fbUserId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ state: appState })
+    })
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      firestoreError = false;
+      updateSyncBadge();
+    })
+    .catch(e => {
+      console.error("Vercel KV save error:", e);
+      firestoreError = true;
+      updateSyncBadge();
+    });
   }
 }
 let remoteListenerUnsubscribe = null;
@@ -867,37 +856,43 @@ function unlinkMobileDevice() {
 }
 
 function updateMobilePresence() {
-  if (!fbUserId || !fbDb) return;
+  if (!fbUserId || !firebaseLoaded) return;
   appState.lastActiveMobile = Date.now();
-  fbDb.from('users').update({ 
-    state: appState,
-    updated_at: new Date().toISOString()
-  }).eq('id', fbUserId).then(({ error }) => {
-    if (error) {
-      saveState();
-    }
-  });
+  saveState();
 }
 // Run presence check
 setInterval(updateMobilePresence, 30000);
 
-let remoteChannel = null;
+let pollInterval = null;
 function setupRemoteListener() {
-  if (!fbUserId || !fbDb) return;
-  if (remoteChannel) {
-    fbDb.removeChannel(remoteChannel);
+  if (!fbUserId || !firebaseLoaded) return;
+  if (pollInterval) {
+    clearInterval(pollInterval);
   }
   
-  // 1. Initial fetch from database
-  fbDb.from('users').select('state').eq('id', fbUserId).maybeSingle()
-    .then(({ data, error }) => {
-      firestoreError = !!error;
-      if (error) {
-        console.error("Supabase select error:", error);
-        updateSyncBadge();
-        return;
-      }
-      
+  // 1. Initial fetch
+  fetchRemoteState();
+  
+  // 2. Poll every 3 seconds
+  pollInterval = setInterval(fetchRemoteState, 3000);
+}
+
+function fetchRemoteState() {
+  if (!fbUserId || !firebaseLoaded || !navigator.onLine) {
+    if (!navigator.onLine) {
+      firestoreError = true;
+      updateSyncBadge();
+    }
+    return;
+  }
+  
+  fetch(`/api/sync?uid=${fbUserId}`)
+    .then(res => {
+      if (!res.ok) throw new Error("HTTP error " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      firestoreError = false;
       if (data && data.state) {
         const remoteState = data.state;
         lastRemoteState = remoteState;
@@ -913,62 +908,19 @@ function setupRemoteListener() {
           appState.lastActiveMobile = remoteState.lastActiveMobile;
         }
       } else {
-        // Document does not exist yet, initialize it
+        // Document does not exist yet on remote, initialize it
         isFirstLoad = false;
-        fbDb.from('users').upsert({ id: fbUserId, state: appState, updated_at: new Date().toISOString() })
-          .then(({ error }) => {
-            if (error) {
-              console.error("Supabase init doc error:", error);
-              firestoreError = true;
-              updateSyncBadge();
-            }
-          })
-          .catch(e => {
-            console.error("Supabase init doc error:", e);
-            firestoreError = true;
-            updateSyncBadge();
-          });
-      }
-      
-      // 2. Realtime updates subscription
-      remoteChannel = fbDb.channel(`users_changes_${fbUserId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'users',
-            filter: `id=eq.${fbUserId}`
+        fetch(`/api/sync?uid=${fbUserId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
           },
-          (payload) => {
-            firestoreError = false;
-            const remoteState = payload.new ? payload.new.state : null;
-            if (remoteState) {
-              lastRemoteState = remoteState;
-              updateSyncBadge();
-              
-              if (isFirstLoad || !areStatesEqual(remoteState, appState)) {
-                isFirstLoad = false;
-                Object.assign(appState, remoteState);
-                saveStateLocal();
-                renderAllState();
-              } else {
-                appState.lastActiveDesktop = remoteState.lastActiveDesktop;
-                appState.lastActiveMobile = remoteState.lastActiveMobile;
-              }
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error("Supabase Realtime subscription error:", status);
-            firestoreError = true;
-            updateSyncBadge();
-          }
-        });
+          body: JSON.stringify({ state: appState })
+        }).catch(err => console.error("API init error:", err));
+      }
     })
     .catch(e => {
-      console.error("Supabase select error:", e);
+      console.error("Vercel KV fetch error:", e);
       firestoreError = true;
       updateSyncBadge();
     });
@@ -1594,7 +1546,7 @@ try {
 } catch(e) {}
 
 // 2. Set up sync initialization
-if (fbDb) {
+if (firebaseLoaded) {
   let syncedUid = null;
   try {
     syncedUid = localStorage.getItem('senaFitnessSyncedUid');
@@ -1630,36 +1582,12 @@ if (fbDb) {
     }
     initializeSync(anonId);
   }
-} else {
-  // If db is not loaded, run fallback timeout
-  setTimeout(() => {
-    if (!isSyncInitialized) {
-      console.warn("Supabase client not loaded, using local fallback");
-      firestoreError = true;
-      let syncedUid = null;
-      try {
-        syncedUid = localStorage.getItem('senaFitnessSyncedUid');
-      } catch(e) {}
-      
-      if (syncedUid) {
-        syncedUid = syncedUid.trim();
-        if (syncedUid.startsWith('custom_')) {
-          const cleanId = syncedUid.replace('custom_', '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
-          initializeSync('custom_' + cleanId);
-        } else {
-          initializeSync(syncedUid);
-        }
-      } else {
-        initializeSync('temp_local_' + Math.random().toString(36).substring(2, 10));
-      }
-    }
-  }, 1000);
 }
 
 // Listeners de rede para atualizar interface de sincronização
 window.addEventListener('online', () => {
   firestoreError = false;
-  if (fbDb && isSyncInitialized) {
+  if (firebaseLoaded && isSyncInitialized) {
     setupRemoteListener();
   }
   updateSyncBadge();
