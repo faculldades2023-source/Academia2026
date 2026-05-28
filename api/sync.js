@@ -31,11 +31,17 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const response = await fetch(kvUrl, {
         headers: {
-          Authorization: `Bearer ${kvToken}`
+          Authorization: `Bearer ${kvToken}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(['GET', key]),
         method: 'POST'
       });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("KV GET Error Response:", errorText);
+        return res.status(response.status).json({ error: `KV GET failed: ${errorText}` });
+      }
       const data = await response.json();
       const val = data.result ? JSON.parse(data.result) : null;
       return res.status(200).json({ state: val });
@@ -47,13 +53,19 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Missing state body' });
       }
       
-      await fetch(kvUrl, {
+      const response = await fetch(kvUrl, {
         headers: {
-          Authorization: `Bearer ${kvToken}`
+          Authorization: `Bearer ${kvToken}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(['SET', key, JSON.stringify(state)]),
         method: 'POST'
       });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("KV SET Error Response:", errorText);
+        return res.status(response.status).json({ error: `KV SET failed: ${errorText}` });
+      }
       return res.status(200).json({ success: true });
     }
 

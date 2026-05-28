@@ -1532,6 +1532,7 @@ setInterval(updateDesktopPresence, 30000);
 let pollInterval = null;
 function setupRemoteListener() {
   if (!firebaseUserId || !firebaseLoaded) return;
+  
   if (pollInterval) {
     clearInterval(pollInterval);
   }
@@ -1539,8 +1540,33 @@ function setupRemoteListener() {
   // 1. Initial fetch
   fetchRemoteState();
   
-  // 2. Poll every 3 seconds
-  pollInterval = setInterval(fetchRemoteState, 3000);
+  // 2. Start polling
+  startPolling();
+  
+  // 3. Listen for visibility changes to save quota
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(fetchRemoteState, 5000); // Poll every 5 seconds
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    stopPolling();
+  } else {
+    fetchRemoteState();
+    startPolling();
+  }
 }
 
 function fetchRemoteState() {
