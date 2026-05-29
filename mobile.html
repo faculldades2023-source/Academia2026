@@ -598,6 +598,20 @@ select.form-input{appearance:none}
           <button class="btn btn-primary" style="padding: 0 16px; font-size: 12px; height: 38px; display: flex; align-items: center; justify-content: center; font-weight: bold;" onclick="saveMobileSyncId()">Salvar</button>
         </div>
       </div>
+
+      <!-- Backup Offline (Exportar/Importar Arquivo) -->
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--bg2, rgba(255,255,255,0.02)); padding: 12px; border-radius: 12px; border: 1px solid var(--border);">
+        <label class="form-label" style="margin-bottom: 0; font-weight: bold; color: var(--accent2, #f59e0b);">💾 Backup Offline (Arquivo JSON)</label>
+        <p style="font-size: 11px; color: var(--muted); margin: 0; line-height: 1.4;">
+          Exportar e importar dados manualmente via arquivo entre celular e computador.
+        </p>
+        <div style="display: flex; gap: 8px; margin-top: 4px;">
+          <button class="btn btn-ghost btn-sm" onclick="exportBackupFile()" style="flex: 1; border: 1px solid var(--border); font-size: 11px; padding: 8px 10px; cursor: pointer; color: var(--text); background: var(--bg3);">📤 Exportar</button>
+          <button class="btn btn-ghost btn-sm" onclick="triggerImportBackup()" style="flex: 1; border: 1px solid var(--border); font-size: 11px; padding: 8px 10px; cursor: pointer; color: var(--text); background: var(--bg3);">📥 Importar</button>
+        </div>
+        <input type="file" id="backupFileInput" style="display: none;" accept=".json" onchange="importBackupFile(event)" />
+      </div>
+
       <div class="divider" style="margin: 5px 0;"></div>
 
       <button class="btn btn-danger btn-block btn-sm" style="display: flex; justify-content: center; align-items: center;" onclick="unlinkMobileDevice()">🗑️ Desvincular e Resetar Sincronização</button>
@@ -853,6 +867,50 @@ function unlinkMobileDevice() {
       window.location.reload();
     }, 1200);
   }
+}
+
+function exportBackupFile() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+  const downloadAnchor = document.createElement('a');
+  const dateStr = new Date().toISOString().substring(0, 10);
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `sena_fitness_backup_${dateStr}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  toast("Backup exportado! 📤");
+}
+
+function triggerImportBackup() {
+  const fileInput = document.getElementById('backupFileInput');
+  if (fileInput) fileInput.click();
+}
+
+function importBackupFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const importedState = JSON.parse(e.target.result);
+      if (typeof importedState === 'object' && importedState !== null) {
+        if (confirm("Deseja realmente importar este arquivo? Isso irá substituir todas as suas informações atuais.")) {
+          Object.assign(appState, importedState);
+          saveState();
+          renderAllState();
+          toast("Dados importados! 📥");
+          closeOv('overlay-sync-settings');
+        }
+      } else {
+        alert("Erro: O arquivo de backup selecionado é inválido.");
+      }
+    } catch(err) {
+      console.error("Error parsing backup file:", err);
+      alert("Erro ao ler o arquivo de backup. Certifique-se de selecionar um arquivo JSON válido exportado por este aplicativo.");
+    }
+  };
+  reader.readAsText(file);
 }
 
 function updateMobilePresence() {

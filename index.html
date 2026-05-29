@@ -1207,6 +1207,19 @@ label.form-label{font-size:12px;color:var(--muted);letter-spacing:.08em;text-tra
       </div>
       <div id="syncCopySuccess" style="color: var(--accent3); font-size: 12px; display: none; text-align: center; margin-top: 4px;">✓ Link copiado com sucesso!</div>
     </div>
+
+    <!-- Opção 3: Backup Manual (Exportar/Importar Arquivo) -->
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; text-align: left; background: var(--bg2); padding: 12px; border-radius: 12px; border: 1px solid var(--border);">
+      <label class="form-label" style="margin-bottom: 0; font-weight: bold; color: var(--accent2);">💾 Backup Offline (Arquivo JSON)</label>
+      <p style="font-size: 11px; color: var(--muted); margin: 0; line-height: 1.4;">
+        Transfira seus dados manualmente entre computador e celular sem precisar de internet.
+      </p>
+      <div style="display: flex; gap: 8px; margin-top: 4px;">
+        <button class="btn btn-ghost btn-sm" onclick="exportBackupFile()" style="flex: 1; border: 1px solid var(--border); background: var(--bg3); cursor: pointer; color: var(--text);">📤 Exportar Backup</button>
+        <button class="btn btn-ghost btn-sm" onclick="triggerImportBackup()" style="flex: 1; border: 1px solid var(--border); background: var(--bg3); cursor: pointer; color: var(--text);">📥 Importar Backup</button>
+      </div>
+      <input type="file" id="backupFileInput" style="display: none;" accept=".json" onchange="importBackupFile(event)" />
+    </div>
     
     <div style="display: flex; gap: 10px; margin-top: 20px;">
       <button class="btn btn-ghost" style="flex: 1; justify-content: center;" onclick="closeModal('syncModal')">Fechar</button>
@@ -1679,6 +1692,50 @@ function copySyncLink() {
   }).catch(err => {
     console.error('Could not copy text: ', err);
   });
+}
+
+function exportBackupFile() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+  const downloadAnchor = document.createElement('a');
+  const dateStr = new Date().toISOString().substring(0, 10);
+  downloadAnchor.setAttribute("href", dataStr);
+  downloadAnchor.setAttribute("download", `sena_fitness_backup_${dateStr}.json`);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+  showToast("Backup exportado com sucesso! 📤");
+}
+
+function triggerImportBackup() {
+  const fileInput = document.getElementById('backupFileInput');
+  if (fileInput) fileInput.click();
+}
+
+function importBackupFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const importedState = JSON.parse(e.target.result);
+      if (typeof importedState === 'object' && importedState !== null) {
+        if (confirm("Deseja realmente importar este arquivo? Isso irá substituir todas as suas informações atuais.")) {
+          Object.assign(appState, importedState);
+          saveState();
+          renderAllState();
+          showToast("Dados importados com sucesso! 📥");
+          closeModal('syncModal');
+        }
+      } else {
+        alert("Erro: O arquivo de backup selecionado é inválido.");
+      }
+    } catch(err) {
+      console.error("Error parsing backup file:", err);
+      alert("Erro ao ler o arquivo de backup. Certifique-se de selecionar um arquivo JSON válido exportado por este aplicativo.");
+    }
+  };
+  reader.readAsText(file);
 }
 
 function todayLabel(){
